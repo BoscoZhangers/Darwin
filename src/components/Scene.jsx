@@ -90,7 +90,7 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
 };
 
 // --- MAIN SCENE ---
-export default function Scene({ bubbles, activeId, setActiveId, numUsers }) {
+export default function Scene({ bubbles, activeId, setActiveId }) {
   
   // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
   // 1. Count how many bubbles are actually visible
@@ -124,7 +124,7 @@ export default function Scene({ bubbles, activeId, setActiveId, numUsers }) {
               key={b.id}
               {...b} 
               // PASS CALCULATED COUNT INSTEAD OF STATIC COUNT
-              crowdCount={baseCount} 
+              crowdCount={b.count} 
               isSelected={activeId === b.id}
               onSelect={setActiveId}
             />
