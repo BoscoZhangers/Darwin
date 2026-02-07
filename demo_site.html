@@ -3,35 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Basic Website</title>
+    <title>Detailed Border Styles</title>
     <style>
-        /* Div 1: Header style */
+        /* Div 1: Using specific border sub-properties */
         #box-1 {
-            color: midnightblue;
-            border: 2px solid midnightblue;
+            color: #2c3e50;
+            border-width: 2px;
+            border-style: solid;
+            border-color: #2c3e50;
         }
 
-        /* Div 2: Information style */
+        /* Div 2: Using a dashed style */
         #box-2 {
-            color: darkslategray;
-            border: 2px dotted darkslategray;
+            color: #e67e22;
+            border-width: 4px;
+            border-style: dashed;
+            border-color: #e67e22;
         }
 
-        /* Div 3: Button style */
+        /* Div 3 (Button): Thick "weight" with solid style */
         #button-1 {
             color: white;
-            background-color: crimson;
-            border: 3px solid black;
+            background-color: #2980b9;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1a5276;
+            cursor: pointer;
         }
 
-        /* Div 4: Button style */
+        /* Div 4 (Button): Double line style */
         #button-2 {
-            color: forestgreen;
-            border: 5px double forestgreen;
-        }
-
-        /* Simple pointer for the buttons */
-        .clickable {
+            color: #27ae60;
+            border-width: 8px;
+            border-style: double;
+            border-color: #27ae60;
             cursor: pointer;
         }
     </style>
@@ -39,19 +44,19 @@
 <body>
 
     <div id="box-1">
-        <h1>Welcome to My Site</h1>
+        <h1>Heading Section</h1>
     </div>
 
     <div id="box-2">
-        <p>This layout uses four divs with strictly color and border styles.</p>
+        <p>This box uses a dashed border-style and a medium border-width.</p>
     </div>
 
-    <div id="button-1" class="clickable">
-        <strong>Action One</strong>
+    <div id="button-1">
+        <strong>Primary Button</strong>
     </div>
 
-    <div id="button-2" class="clickable">
-        <strong>Action Two</strong>
+    <div id="button-2">
+        <strong>Secondary Button</strong>
     </div>
 
 </body>
