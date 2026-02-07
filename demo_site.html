@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Streamlined Click Lab</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; display: grid; grid-template-areas: "nav nav" "side main" "foot foot"; }
+        
+        /* Class 1: Top Navigation (Global Context) */
+        .zone-nav { grid-area: nav; background: #333; color: white; padding: 15px; text-align: center; }
+
+        /* Class 2: Sidebar (Secondary Navigation) */
+        .zone-sidebar { grid-area: side; width: 150px; background: #f0f0f0; padding: 20px; border-right: 1px solid #ddd; }
+
+        /* Class 3: Main Action Area (The "Hero" zone) */
+        .zone-hero { grid-area: main; padding: 40px; text-align: center; }
+
+        /* Class 4: Color Feature A (Primary Blue) */
+        .color-a-btn { background: #007bff; color: white; padding: 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+        /* Class 5: Color Feature B (Success Green) */
+        .color-b-btn { background: #28a745; color: white; padding: 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-left: 10px; }
+
+        .zone-footer { grid-area: foot; background: #eee; padding: 10px; font-size: 0.8rem; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="zone-nav">Header Zone</div>
+
+    <div class="zone-sidebar">Sidebar Options</div>
+
+    <div class="zone-hero">
+        <h2>Choose a Path</h2>
+        <button class="color-a-btn">Option A (Blue)</button>
+        <button class="color-b-btn">Option B (Green)</button>
+    </div>
+
+    <div class="zone-footer">System Status: Active</div>
+
+</body>
+</html>
