@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Activity, Zap, Play, AlertTriangle, Shapes, Trash2, Code, Github, FileCode, ChevronRight, ChevronDown, Eye, EyeOff, Lock, GitCommit, Move, GripHorizontal, ArrowLeft } from 'lucide-react';
+import { Layers, Activity, Zap, Play, AlertTriangle, Shapes, Trash2, Code, Github, FileCode, ChevronRight, ChevronDown, Eye, EyeOff, Lock, GitCommit, Move, GripHorizontal, ArrowLeft, RotateCcw, MousePointer2 } from 'lucide-react';
 import Scene from './Scene';
 import { subscribeToSwarm } from '../lib/firebase';
 
 // --- HELPER: GENERATE REACT CODE FROM VISUAL LAYOUT ---
 const generateReactCode = (layout) => {
   const elements = layout.map(item => {
-    // Basic inline styles for absolute positioning
     const commonStyle = `position: 'absolute', left: ${Math.round(item.x)}, top: ${Math.round(item.y)}, width: ${item.w}, height: ${item.h}`;
     
     if (item.type === 'navbar') {
@@ -143,7 +142,7 @@ const CanvasPreview = ({ layout, onUpdateLayout, activeFeature, bubbles, demoMod
   );
 };
 
-// --- VS CODE EDITOR (Now displays real generated code) ---
+// --- VS CODE EDITOR ---
 const FullCodeEditor = ({ code }) => {
   const [activeFile, setActiveFile] = useState('src/App.jsx');
   const [expandedFolders, setExpandedFolders] = useState({ 'src': true });
@@ -197,7 +196,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [rightPanelWidth, setRightPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
   
-  // Layout States
   const [liveLayout, setLiveLayout] = useState(INITIAL_LAYOUT);
   const [demoLayout, setDemoLayout] = useState(INITIAL_LAYOUT);
 
@@ -216,12 +214,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
           path: 'src/App.jsx' 
         });
 
-        // Store SHA so we can update it later
         setFileSha(data.sha); 
-        
-        // Initial code preview
         setGeneratedCode(atob(data.content));
-        
         setAiLog(prev => [...prev, { role: 'success', text: 'SYNCED: src/App.jsx loaded.' }]);
       } catch (err) {
         setAiLog(prev => [...prev, { role: 'error', text: 'src/App.jsx not found. Will create new.' }]);
@@ -235,7 +229,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
     setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
   };
 
-  // --- 3. COMMIT HANDLER (REAL WRITE) ---
+  // --- 3. COMMIT HANDLER ---
   const handleCommit = async () => {
     if (!token || !repo) {
        alert("No repo connected! (Demo mode)");
@@ -245,11 +239,9 @@ export default function Dashboard({ user, token, repo, onBack }) {
     setIsCommitting(true);
     setAiLog(prev => [...prev, { role: 'system', text: 'Generating Code & Pushing...' }]);
 
-    // A. Convert Visual Layout -> React Code String
     const newCode = generateReactCode(demoLayout);
     setGeneratedCode(newCode);
 
-    // B. Push to GitHub
     const octokit = new Octokit({ auth: token });
     try {
       const { data } = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
@@ -257,13 +249,12 @@ export default function Dashboard({ user, token, repo, onBack }) {
         repo: repo.name,
         path: 'src/App.jsx',
         message: 'Update layout via Darwin 🚀',
-        content: btoa(newCode), // Base64 encode
-        sha: fileSha // Required to update existing file
+        content: btoa(newCode),
+        sha: fileSha
       });
       
-      setFileSha(data.content.sha); // Update SHA for next commit
-      setLiveLayout([...demoLayout]); // Update Live View to match
-      
+      setFileSha(data.content.sha);
+      setLiveLayout([...demoLayout]);
       setAiLog(prev => [...prev, { role: 'success', text: 'DEPLOY SUCCESSFUL: Commit pushed.' }]);
     } catch (err) {
       console.error(err);
@@ -300,6 +291,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
   };
 
+  const handleResetEnvironment = () => {
+    setBubbles([]);
+    setAiLog(prev => [...prev, { role: 'system', text: '3D Environment Cleared.' }]);
+  };
+
   useEffect(() => { const h = (e) => { if (isResizing) setRightPanelWidth(window.innerWidth - e.clientX); }; const u = () => setIsResizing(false); if (isResizing) { window.addEventListener('mousemove', h); window.addEventListener('mouseup', u); } return () => { window.removeEventListener('mousemove', h); window.removeEventListener('mouseup', u); }; }, [isResizing]);
   const toggleProperties = () => { if (showProperties) { setShowProperties(false); setLeftPanelWidth(0); } else { setShowProperties(true); setLeftPanelWidth(250); } };
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
@@ -326,21 +322,72 @@ export default function Dashboard({ user, token, repo, onBack }) {
   return (
     <div className={`h-screen w-screen bg-tech-black text-white flex overflow-hidden font-sans ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
       <div className="w-16 border-r border-white/10 flex flex-col items-center py-6 gap-6 z-30 bg-tech-black/90 backdrop-blur shrink-0">
-        <div className="w-10 h-10 bg-gradient-to-tr from-neon-blue to-neon-purple rounded-lg flex items-center justify-center font-bold text-xl">D</div>
-        <div className="flex flex-col gap-4 mt-4 w-full px-2">
+        
+        {/* LOGO */}
+        <div className="w-10 h-10 bg-gradient-to-tr from-neon-blue to-neon-purple rounded-lg flex items-center justify-center font-bold text-xl cursor-default">D</div>
+
+        <div className="flex flex-col gap-4 w-full px-2 mt-4">
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'bg-neon-blue text-black shadow-[0_0_15px_rgba(0,243,255,0.5)]' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'bg-neon-purple text-white shadow-[0_0_15px_rgba(188,19,254,0.5)]' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}><Code size={20} /></button>
             <button onClick={toggleProperties} className={`p-3 rounded-xl transition-all ${showProperties ? 'bg-white/20 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}><Shapes size={20} /></button>
         </div>
-        <div className="mt-auto flex flex-col gap-4 items-center w-full px-2"><button onClick={() => window.location.reload()} className="p-3 hover:bg-red-500/20 rounded-xl text-red-500 transition-colors"><Activity size={20} className="rotate-180" /></button></div>
+
+        {/* --- EXIT BUTTON (Moved to Bottom Left) --- */}
+        <div className="mt-auto flex flex-col gap-4 items-center w-full px-2">
+            <button 
+              onClick={onBack} 
+              className="group relative p-3 hover:bg-red-500/20 rounded-xl text-gray-500 hover:text-red-500 transition-colors"
+            >
+              <ArrowLeft size={20} />
+              <div className="absolute left-14 top-2 bg-black text-xs px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                Back to Hub
+              </div>
+            </button>
+        </div>
       </div>
+      
+      {/* PROPERTIES PANEL */}
       <div style={{ width: leftPanelWidth }} className="bg-black/90 border-r border-white/10 backdrop-blur-xl z-20 transition-all duration-300 ease-out overflow-hidden flex flex-col shrink-0"><div className="p-4 border-b border-white/10 font-bold text-xs text-gray-400 uppercase">Properties</div><div className="flex-1 overflow-y-auto p-2 space-y-2">{bubbles.map(b => (<div key={b.id} className="bg-white/5 rounded-lg p-3 border border-white/5 flex items-center justify-between"><div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full transition-all ${b.visible ? '' : 'opacity-20'}`} style={{ backgroundColor: b.color }} /><span className={`text-sm font-bold ${b.visible ? 'text-white' : 'text-gray-500'}`}>{b.label}</span></div><div className="flex items-center gap-1"><button onClick={() => toggleVisibility(b.id)} className="p-2 text-gray-500 hover:text-white transition-colors">{b.visible ? <Eye size={14} /> : <EyeOff size={14} />}</button><button onClick={() => setBubbles(prev => prev.filter(x => x.id !== b.id))} className="p-2 text-gray-500 hover:text-red-400 transition-colors"><Trash2 size={14}/></button></div></div>))}</div></div>
+      
+      {/* CENTER VIEW */}
       <div className={`flex-1 relative bg-gradient-to-b from-tech-black to-tech-gray min-w-0 flex flex-col ${isResizing ? 'pointer-events-none' : ''}`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+        
+        {/* TOP STATUS BAR */}
         {viewMode === 'simulation' && (<div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none"><div><h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Active Swarm</h2><div className="text-3xl font-mono text-neon-blue animate-pulse">{totalUsers > 0 ? totalUsers : 'CONNECTING...'}</div></div><div className="pointer-events-auto bg-black/50 backdrop-blur rounded-full p-1 border border-white/10 flex items-center gap-2"><button onClick={() => setDemoMode(true)} className={`px-4 py-1 rounded-full text-xs font-bold transition-all ${demoMode ? 'bg-neon-blue text-black' : 'text-gray-400'}`}>DEMO</button><button onClick={() => setDemoMode(false)} className={`px-4 py-1 rounded-full text-xs font-bold transition-all ${!demoMode ? 'bg-red-500 text-white' : 'text-gray-400'}`}>LIVE</button></div></div>)}
+        
+        {/* --- BOTTOM FLOATING DOCK (NEW) --- */}
+        {viewMode === 'simulation' && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+             <div className="flex items-center gap-1 px-2 py-2 bg-black/70 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
+                
+                {/* Reset Button */}
+                <button 
+                  onClick={handleResetEnvironment}
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-full transition-all text-xs font-bold text-gray-300 hover:text-white group"
+                >
+                  <RotateCcw size={14} className="group-hover:-rotate-90 transition-transform duration-500" />
+                  <span>Reset Environment</span>
+                </button>
+
+                {/* Vertical Divider */}
+                <div className="w-px h-4 bg-white/20 mx-1"></div>
+
+                {/* Just a decorative 'Control' visual to make it look like a dock */}
+                <div className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-gray-500 cursor-default select-none">
+                   <MousePointer2 size={14} /> 
+                   <span>{bubbles.length} Objects</span>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {/* 3D SCENE OR CODE EDITOR */}
         <div className="flex-1 relative overflow-hidden">
           {viewMode === 'simulation' ? <Scene bubbles={bubbles} activeId={activeFeature} setActiveId={setActiveFeature} totalUsers={totalUsers} /> : <FullCodeEditor code={generatedCode} />}
         </div>
       </div>
+      
+      {/* RESIZER & RIGHT PANEL */}
       <div onMouseDown={() => setIsResizing(true)} className={`w-1 cursor-col-resize z-50 flex items-center justify-center transition-colors ${isResizing ? 'bg-neon-blue' : 'bg-white/5 hover:bg-neon-blue'}`}><div className="h-8 w-1 bg-white/20 rounded-full" /></div>
       <div style={{ width: rightPanelWidth }} className="flex flex-col bg-tech-gray shadow-2xl z-20 shrink-0 border-l border-white/10">
          <div className="h-[60%] relative overflow-hidden"><CanvasPreview layout={demoMode ? demoLayout : liveLayout} onUpdateLayout={handleUpdateDemoLayout} activeFeature={activeFeature} bubbles={bubbles} demoMode={demoMode} onCommit={handleCommit} isCommitting={isCommitting} /></div>
