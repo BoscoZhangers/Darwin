@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import random
+from train.model_sampler import Sampler
 
 app = FastAPI()
 
@@ -21,24 +22,12 @@ class HitRequest(BaseModel):
     y: Optional[float]
     div_id: Optional[str]
 
+sampler = Sampler()
+map = {"btn-1" : 0, "hero-1": 1}
 
 @app.post('/api/get_hit_count')
 async def get_hit_count(body: HitRequest):
-    """Return a dummy number of users for the provided hit (x,y,div_id).
-
-    This is a simple stub used for frontend integration and testing.
-    """
-    # Produce a pseudo-random but bounded user count.
-    base = 100
-    # Slightly vary by div_id if present so results are somewhat stable per id
-    if body.div_id:
-        seed = sum(ord(c) for c in body.div_id)
-        random.seed(seed + (int(body.x or 0) * 13) + (int(body.y or 0) * 7))
-    else:
-        random.seed()
-
-    count = base + random.randint(-40, 120)
-    count = max(0, count)
+    count = int(sampler.sample(body.x, body.y, map[body.div_id]))
     print(count)
     return {"count": count}
 

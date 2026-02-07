@@ -231,20 +231,20 @@ export default function Dashboard({ user, token, repo, onBack }) {
     setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
   
   
-    console.log("Updating position...")
+    // console.log("Updating position...")
 
     const fetchBackendCount = async () => {
-      console.log("Calling backend")
+      // console.log("Calling backend")
       try {
         const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x: 0, y: 0, div_id: id })
+          body: JSON.stringify({ x: newX, y: newY, div_id: id })
         });
-        console.log(resp);
+        // console.log(resp);
         if (!resp.ok) return;
         const json = await resp.json();
-        console.log("Got", json?.count)
+        // console.log("Got", json?.count)
         if (typeof json?.count === 'number') 
           setBubbles(prevBubbles =>
             prevBubbles.map(bubble =>
@@ -252,7 +252,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
               bubble 
             )
           )
-        console.log(bubbles);
+        // console.log(bubbles);
       } catch (e) {
         // ignore network errors during development
         console.error(e);
