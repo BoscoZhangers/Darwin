@@ -40,14 +40,14 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
 };
 
 // --- MAIN SCENE ---
-export default function Scene({ bubbles, activeId, setActiveId, totalUsers = 0 }) {
+export default function Scene({ bubbles, activeId, setActiveId, numUsers }) {
   
   // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
   // 1. Count how many bubbles are actually visible
   const visibleBubbles = bubbles.filter(b => b.visible);
   
   // 2. Divide total users among them (e.g., 100 users / 2 bubbles = 50 each)
-  const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
+  // const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
 
   return (
     <div className="w-full h-full bg-tech-black cursor-crosshair">
@@ -69,8 +69,7 @@ export default function Scene({ bubbles, activeId, setActiveId, totalUsers = 0 }
             <BubbleCluster 
               key={b.id}
               {...b} 
-              // PASS CALCULATED COUNT INSTEAD OF STATIC COUNT
-              crowdCount={baseCount} 
+              crowdCount={numUsers[b.id]} // UPDATE BASED ON PREDICTION
               isSelected={activeId === b.id}
               onSelect={setActiveId}
             />
