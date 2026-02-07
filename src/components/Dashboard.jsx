@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layers, Activity, Zap, Play, AlertTriangle, Shapes, Trash2, Code, Github, FileCode, ChevronRight, ChevronDown, Eye, EyeOff, Lock, GitCommit, Move } from 'lucide-react';
 import Scene from './Scene';
 import { subscribeToSwarm } from '../lib/firebase';
+import { APP_HOST, PORT } from '../constants';
 
 // --- DRAGGABLE WRAPPER (For 3D) ---
 const DraggableItem = ({ label, color, type, children }) => {
@@ -103,7 +104,30 @@ const CanvasPreview = ({ siteLayout, setSiteLayout, activeFeature, bubbles, demo
       item.id === id ? { ...item, x: newX, y: newY } : item
     ));
 
-    console.log(siteLayout)
+    console.log("Updating position...")
+
+    const fetchBackendCount = async () => {
+      console.log("Calling backend")
+      try {
+        const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ x: 0, y: 0, div_id: id })
+        });
+        if (!resp.ok) return;
+        const json = await resp.json();
+        console.log("Got", json.count)
+        if (mounted && typeof json?.count === 'number') setNumUsers({...numUsers, id : json.count});
+        console.log(numUsers);
+      } catch (e) {
+        // ignore network errors during development
+      }
+    };
+
+    if (demoMode) {
+      fetchBackendCount();
+      // intervalId = setInterval(fetchBackendCount, 1500);
+    }
   };
 
   return (
@@ -176,6 +200,7 @@ export default function Dashboard() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(0);
   const [rightPanelWidth, setRightPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
+  const [numUsers, setNumUsers] = useState({});
 
   // --- ABSOLUTE CANVAS LAYOUT STATE ---
   const [siteLayout, setSiteLayout] = useState([
@@ -265,7 +290,7 @@ export default function Dashboard() {
           </div>
         )}
         <div className="flex-1 relative overflow-hidden">
-            {viewMode === 'simulation' ? <Scene bubbles={bubbles} activeId={activeFeature} setActiveId={setActiveFeature} totalUsers={totalUsers} /> : <FullCodeEditor isConnected={isConnected} onConnect={handleConnect} />}
+            {viewMode === 'simulation' ? <Scene bubbles={bubbles} activeId={activeFeature} setActiveId={setActiveFeature} numUsers={numUsers} /> : <FullCodeEditor isConnected={isConnected} onConnect={handleConnect} />}
         </div>
       </div>
 
