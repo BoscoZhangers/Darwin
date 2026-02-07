@@ -72,6 +72,7 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, r
 // --- CLUSTER ---
 const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect }) => {
   const bubbleRef = useRef();
+  console.log("Crowd count update", crowdCount)
   return (
     <group>
       {isSelected && <TransformControls object={bubbleRef} mode="translate" />}
@@ -95,6 +96,7 @@ export default function Scene({ bubbles, activeId, setActiveId }) {
   // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
   // 1. Count how many bubbles are actually visible
   const visibleBubbles = bubbles.filter(b => b.visible);
+  const unassignedUsers = 150;
   
   // 2. Divide total users among them (e.g., 100 users / 2 bubbles = 50 each)
   // const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
