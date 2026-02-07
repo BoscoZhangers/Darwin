@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependency directories
+node_modules/
+
+# Production build objects
+dist/
+
+# Local Environment Variables (ADD THIS IF MISSING)
+.env
+.env.local
+.env.*.local
