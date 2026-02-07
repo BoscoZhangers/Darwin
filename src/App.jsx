@@ -18,7 +18,12 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
-      await signInWithGithub();
+      const res = await signInWithGithub();
+      // If signIn returns a result, set user/token immediately to avoid timing issues
+      if (res) {
+        setUser(res.user);
+        setToken(res.token);
+      }
     } catch (error) {
       console.error("Login failed", error);
     }

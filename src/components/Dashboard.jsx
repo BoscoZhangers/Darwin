@@ -3,9 +3,10 @@ import { Octokit } from "@octokit/rest";
 import { Layers, Zap, Shapes, Code, FileCode, GitCommit, ArrowLeft, RotateCcw, Globe, Folder, File, X, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, Radio, MousePointer2, Plus } from 'lucide-react';
 import Scene from './Scene';
 import { getDatabase, ref, onValue } from "firebase/database";
+import {APP_HOST, PORT} from "../constants";
 
 // --- 1. RUNTIME RENDERER (Smart Iframe) ---
-const IframeRenderer = ({ code, onUpdateCode, mode, onExtractStart }) => {
+const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart }) => {
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -29,6 +30,8 @@ const IframeRenderer = ({ code, onUpdateCode, mode, onExtractStart }) => {
           }
         );
         if (newCode !== code) onUpdateCode(newCode);
+        console.log(index);
+        handleUpdateLayout(index, x, y);
       }
 
       // HANDLE: Extraction Dragging (Live Mode)
@@ -247,7 +250,21 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
   // --- REPO LOADING LOGIC (Same as before) ---
   useEffect(() => {
-    async function loadRepoStructure() {
+
+    async function run_pipeline(contents) {
+      // console.log(fileContents['src/App.jsx'])
+      // console.log(contents)
+      const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: contents })
+      });
+
+      if (!resp.ok) return;
+      const json = await resp.json();
+    }
+
+    async function initSync() {
       if (!token || !repo) return;
       const octokit = new Octokit({ auth: token });
       try {
@@ -260,29 +277,19 @@ export default function Dashboard({ user, token, repo, onBack }) {
         setFileTree(mapType(tree));
         setAiLog(prev => [...prev, { role: 'success', text: 'File tree loaded.' }]);
         const appFile = treeData.tree.find(f => f.path === 'src/App.jsx');
-        if (appFile) handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' });
+        if (appFile) {
+          const contents = await handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' });
+          run_pipeline(contents);
+        }
       } catch (err) { console.error(err); }
     }
     initSync();
-
-    async function run_pipeline() {
-      const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html: rawCode })
-      });
-
-      if (!resp.ok) return;
-      const json = await resp.json();
-    }
-
-    run_pipeline();
   }, [token, repo]);
 
   // --- 2. LAYOUT HANDLERS ---
-  const handleUpdateDemoLayout = (id, newX, newY) => {
+  const handleUpdateLayout = (id, newX, newY) => {
     
-    setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
+    // setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
   
   
     console.log("Updating position...")
@@ -293,7 +300,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x: 0, y: 0, div_id: id })
+          body: JSON.stringify({ x: newX, y: newY, div_id: id })
         });
         console.log(resp);
         if (!resp.ok) return;
@@ -328,23 +335,24 @@ export default function Dashboard({ user, token, repo, onBack }) {
     
     const octokit = new Octokit({ auth: token });
     try {
-      const { data } = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        path: 'src/App.jsx',
-        message: 'Update layout via Darwin Drag & Drop 🚀',
-        content: btoa(rawCode),
-        sha: fileSha
-      });
-      setFileSha(data.content.sha);
-      setAiLog(prev => [...prev, { role: 'success', text: 'DEPLOY SUCCESSFUL: GitHub Updated.' }]);
-    } catch (err) {
-      console.error(err);
-      setAiLog(prev => [...prev, { role: 'error', text: 'Commit Failed.' }]);
-    } finally {
-      setIsCommitting(false);
-    loadRepoStructure();
-  }, [token, repo]);
+        const { data } = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+          owner: repo.owner.login,
+          repo: repo.name,
+          path: 'src/App.jsx',
+          message: 'Update layout via Darwin Drag & Drop 🚀',
+          content: btoa(rawCode),
+          sha: fileSha
+        });
+        setFileSha(data.content.sha);
+        setAiLog(prev => [...prev, { role: 'success', text: 'DEPLOY SUCCESSFUL: GitHub Updated.' }]);
+      } catch (err) {
+        console.error(err);
+        setAiLog(prev => [...prev, { role: 'error', text: 'Commit Failed.' }]);
+      } finally {
+        setIsCommitting(false);
+      loadRepoStructure();
+    };
+  }
 
   const handleFileSelect = async (file) => {
     if (file.type === 'dir') return;
@@ -353,13 +361,12 @@ export default function Dashboard({ user, token, repo, onBack }) {
     if (!fileContents[file.path]) {
        setLoadingFile(true);
        const octokit = new Octokit({ auth: token });
-       try { const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); setFileContents(prev => ({ ...prev, [file.path]: atob(data.content) })); } catch (e) {} finally { setLoadingFile(false); }
+       try { const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); setFileContents(prev => ({ ...prev, [file.path]: atob(data.content) })); return atob(data.content); } catch (e) {console.error(e);} finally { setLoadingFile(false); }
     }
   };
 
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
-  const handleCommit = async () => { /* (Commit Logic - Same as before) */ };
 
   // --- DRAG EXTRACTION LOGIC ---
   const handleExtractStart = (tag, id, clientX, clientY) => {
@@ -384,9 +391,10 @@ export default function Dashboard({ user, token, repo, onBack }) {
        const sceneWidth = window.innerWidth - rightPanelWidth;
        if (e.clientX < sceneWidth) {
           // DROP SUCCESSFUL!
-          setBubbles(prev => [...prev, { id: extractedGhost.id, label: extractedGhost.tag, count: 0 }]);
+          setBubbles(prev => [...prev, { id: extractedGhost.id, label: extractedGhost.tag, count: 0, visible: true}]);
           setAiLog(prev => [...prev, { role: 'success', text: `Added tracking for ${extractedGhost.tag}` }]);
        }
+       console.log(bubbles);
        setExtractedGhost(null); // Clear ghost
     };
     window.addEventListener('mousemove', handleGlobalMove);
@@ -415,7 +423,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
       <div className="flex-1 relative bg-[#0a0a0a] overflow-hidden flex flex-col">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
-             <Scene bubbles={bubbles} totalUsers={totalUsers} />
+             <Scene bubbles={bubbles} />
              
              {/* Drop Zone Indicator (Only visible when dragging) */}
              {extractedGhost && (
@@ -478,6 +486,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                  <IframeRenderer 
                     code={fileContents['src/App.jsx'] || ''} 
                     onUpdateCode={handleCodeUpdateFromPreview} 
+                    handleUpdateLayout={handleUpdateLayout}
                     mode={demoMode ? 'edit' : 'live'}
                     onExtractStart={handleExtractStart}
                  />

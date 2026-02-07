@@ -20,17 +20,16 @@ app.add_middleware(
 class HitRequest(BaseModel):
     x: Optional[float]
     y: Optional[float]
-    div_id: Optional[str]
+    div_id: Optional[int]
 
 class RunPipelineRequest(BaseModel):
     html: str
 
 sampler = Sampler()
-map = {"btn-1" : 0, "hero-1": 1}
 
 @app.post('/api/get_hit_count')
 async def get_hit_count(body: HitRequest):
-    count = int(sampler.sample(body.x, body.y, map[body.div_id]))
+    count = int(sampler.sample(body.x, body.y, body.div_id))
     print(count)
     return {"count": count}
 
