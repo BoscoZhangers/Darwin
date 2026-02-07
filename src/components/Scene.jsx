@@ -72,7 +72,7 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, r
 // --- CLUSTER ---
 const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect }) => {
   const bubbleRef = useRef();
-  console.log("Crowd count update", crowdCount)
+  // console.log("Crowd count update", crowdCount)
   return (
     <group>
       {isSelected && <TransformControls object={bubbleRef} mode="translate" />}

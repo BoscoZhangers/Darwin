@@ -130,6 +130,7 @@ export default function Crowd({ count = 10, targetRef, color = 'blue', wander = 
         if (diff === 0) return currentAgents;
 
         if (diff > 0) {
+            // console.log(diff)
             const newAgents = new Array(diff).fill(0).map((_, i) => {
                 const angle = Math.random() * Math.PI * 2;
                 // Spawn Radius: Wander agents spawn far out (40), Feature agents spawn closer (20)
