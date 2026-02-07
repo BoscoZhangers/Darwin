@@ -39,6 +39,7 @@ async def get_hit_count(body: HitRequest):
 
     count = base + random.randint(-40, 120)
     count = max(0, count)
+    print(count)
     return {"count": count}
 
 

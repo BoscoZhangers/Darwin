@@ -3,6 +3,7 @@ import { Octokit } from "@octokit/rest";
 import { Layers, Activity, Zap, Play, AlertTriangle, Shapes, Trash2, Code, Github, FileCode, ChevronRight, ChevronDown, Eye, EyeOff, Lock, GitCommit, Move, GripHorizontal, ArrowLeft, RotateCcw, MousePointer2 } from 'lucide-react';
 import Scene from './Scene';
 import { subscribeToSwarm } from '../lib/firebase';
+import { APP_HOST, PORT } from '../constants';
 
 // --- HELPER: GENERATE REACT CODE FROM VISUAL LAYOUT ---
 const generateReactCode = (layout) => {
@@ -227,7 +228,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
   // --- 2. LAYOUT HANDLERS ---
   const handleUpdateDemoLayout = (id, newX, newY) => {
     
-    
     setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
   
   
@@ -241,10 +241,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ x: 0, y: 0, div_id: id })
         });
+        console.log(resp);
         if (!resp.ok) return;
         const json = await resp.json();
-        console.log("Got", json.count)
-        if (mounted && typeof json?.count === 'number') 
+        console.log("Got", json?.count)
+        if (typeof json?.count === 'number') 
           setBubbles(prevBubbles =>
             prevBubbles.map(bubble =>
               bubble.id === id ? { ...bubble, count : json?.count} : 
@@ -254,6 +255,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         console.log(bubbles);
       } catch (e) {
         // ignore network errors during development
+        console.error(e);
       }
     };
 
