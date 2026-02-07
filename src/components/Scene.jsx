@@ -1,16 +1,15 @@
 import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sphere, MeshDistortMaterial, Grid, Environment, TransformControls, Html } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import Crowd from './Crowd';
 
-// --- 1. The Single Feature Bubble ---
+// --- FEATURE BUBBLE ---
 const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, ref) => {
   useFrame((state) => {
     if (ref.current) {
         const t = state.clock.getElapsedTime();
-        ref.current.children[0].position.y = Math.sin(t) * 0.1; // Bobbing
-        
-        // Floor Clamp
+        ref.current.children[0].position.y = Math.sin(t) * 0.1; 
         if (ref.current.position.y < 1) ref.current.position.y = 1;
     }
   });
@@ -18,86 +17,65 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, r
   return (
     <group ref={ref} onClick={onClick}>
       <Sphere args={[1, 32, 32]}>
-        <MeshDistortMaterial 
-          color={color} speed={2} distort={0.4} roughness={0.2}
-          emissive={isSelected ? color : 'black'} emissiveIntensity={0.5}
-        />
+        <MeshDistortMaterial color={color} speed={2} distort={0.4} roughness={0.2} emissive={color} emissiveIntensity={isSelected ? 4 : 1.5} toneMapped={false} />
       </Sphere>
       <Html position={[0, -1.5, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
-        <div className={`px-2 py-1 rounded text-xs font-bold font-mono transition-all ${isSelected ? 'bg-white text-black scale-110' : 'bg-black/50 text-white'}`}>
-          {label}
-        </div>
+        <div className={`px-3 py-1 rounded-md text-xs font-bold font-mono transition-all border ${isSelected ? 'bg-black text-white border-white scale-125 shadow-[0_0_10px_white]' : 'bg-black/50 text-white/80 border-transparent blur-[0.5px]'}`}>{label}</div>
       </Html>
-      {isSelected && (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[1.2, 1.3, 32]} />
-          <meshBasicMaterial color="white" opacity={0.5} transparent />
-        </mesh>
-      )}
+      {isSelected && (<mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[1.2, 1.3, 32]} /><meshBasicMaterial color="white" opacity={0.5} transparent /></mesh>)}
     </group>
   );
 });
 
-// --- 2. The Cluster (Bubble + Crowd Wrapper) ---
+// --- CLUSTER ---
 const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect }) => {
   const bubbleRef = useRef();
-
   return (
     <group>
       {isSelected && <TransformControls object={bubbleRef} mode="translate" />}
-      
-      <group position={position}>
-        <FeatureBubble 
-          ref={bubbleRef}
-          label={label}
-          color={color}
-          isSelected={isSelected}
-          onClick={(e) => { e.stopPropagation(); onSelect(id); }}
-        />
-      </group>
-
+      <group position={position}><FeatureBubble ref={bubbleRef} label={label} color={color} isSelected={isSelected} onClick={(e) => { e.stopPropagation(); onSelect(id); }} /></group>
       <Crowd count={crowdCount} targetRef={bubbleRef} color={color} />
     </group>
   );
 };
 
-// --- 3. The Main Scene ---
-export default function Scene({ bubbles, activeId, setActiveId }) {
+// --- MAIN SCENE ---
+export default function Scene({ bubbles, activeId, setActiveId, totalUsers = 0 }) {
+  
+  // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
+  // 1. Count how many bubbles are actually visible
+  const visibleBubbles = bubbles.filter(b => b.visible);
+  
+  // 2. Divide total users among them (e.g., 100 users / 2 bubbles = 50 each)
+  const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
+
   return (
     <div className="w-full h-full bg-tech-black cursor-crosshair">
-      <Canvas 
-        camera={{ position: [8, 8, 12], fov: 45 }}
-        onPointerMissed={(e) => e.type === 'click' && setActiveId(null)}
-      >
-        <ambientLight intensity={0.4} />
-        <pointLight position={[10, 10, 10]} intensity={1.5} color="#ffffff" />
+      <Canvas camera={{ position: [8, 8, 12], fov: 45 }} onPointerMissed={(e) => e.type === 'click' && setActiveId(null)} gl={{ antialias: false }}>
+        <ambientLight intensity={0.2} />
+        <pointLight position={[10, 10, 10]} intensity={1.0} color="#ffffff" />
         <Environment preset="city" />
-
-        {/* --- ZOOM & GRID CONTROLS --- */}
-        <OrbitControls 
-          makeDefault 
-          minDistance={5}   // Stop user from zooming too close (inside the bubble)
-          maxDistance={50}  // Stop user from zooming too far (lost in space)
-          maxPolarAngle={Math.PI / 2.05} // Prevent camera from going UNDER the floor
-        />
+        <OrbitControls makeDefault minDistance={5} maxDistance={50} maxPolarAngle={Math.PI / 2.05} />
+        <Grid infiniteGrid fadeDistance={100} sectionColor="#00f3ff" cellColor="#bc13fe" position={[0, -0.1, 0]} />
         
-        <Grid 
-          infiniteGrid 
-          fadeDistance={100} // Increased from 30 to 100 for "Infinite" look
-          sectionColor="#00f3ff" 
-          cellColor="#bc13fe" 
-          position={[0, -0.1, 0]} 
-        />
+        <EffectComposer disableNormalPass>
+          <Bloom luminanceThreshold={1} mipmapBlur intensity={1.5} radius={0.6} />
+          <Vignette eskil={false} offset={0.1} darkness={1.1} />
+        </EffectComposer>
 
-        {/* Render Bubbles */}
-        {bubbles.map((b) => (
-          <BubbleCluster 
-            key={b.id}
-            {...b} 
-            isSelected={activeId === b.id}
-            onSelect={setActiveId}
-          />
-        ))}
+        {bubbles.map((b) => {
+          if (!b.visible) return null;
+          return (
+            <BubbleCluster 
+              key={b.id}
+              {...b} 
+              // PASS CALCULATED COUNT INSTEAD OF STATIC COUNT
+              crowdCount={baseCount} 
+              isSelected={activeId === b.id}
+              onSelect={setActiveId}
+            />
+          );
+        })}
 
       </Canvas>
     </div>
