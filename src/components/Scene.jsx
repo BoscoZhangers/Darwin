@@ -4,6 +4,7 @@ import { OrbitControls, Sphere, MeshDistortMaterial, Grid, Environment, Transfor
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import Crowd from './Crowd';
 
+// --- FEATURE BUBBLE ---
 const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, ref) => {
   useFrame((state) => {
     if (ref.current) {
@@ -12,27 +13,83 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, r
         if (ref.current.position.y < 1) ref.current.position.y = 1;
     }
   });
+
   return (
     <group ref={ref} onClick={onClick}>
-      <Sphere args={[1, 32, 32]}><MeshDistortMaterial color={color} speed={2} distort={0.4} roughness={0.2} emissive={color} emissiveIntensity={isSelected ? 4 : 1.5} toneMapped={false} /></Sphere>
-      <Html position={[0, -1.5, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}><div className={`px-3 py-1 rounded-md text-xs font-bold font-mono transition-all border ${isSelected ? 'bg-black text-white border-white scale-125 shadow-[0_0_10px_white]' : 'bg-black/50 text-white/80 border-transparent blur-[0.5px]'}`}>{label}</div></Html>
-      {isSelected && (<mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[1.2, 1.3, 32]} /><meshBasicMaterial color="white" opacity={0.5} transparent /></mesh>)}
+      {/* The Sphere */}
+      <Sphere args={[1, 32, 32]}>
+        <MeshDistortMaterial 
+          color={color} 
+          speed={2} 
+          distort={0.4} 
+          roughness={0.2} 
+          emissive={color} 
+          emissiveIntensity={isSelected ? 3 : 1.2} 
+          toneMapped={false} 
+          transparent
+          opacity={0.8}
+        />
+      </Sphere>
+      
+      {/* The Label - Now Scaled for 3D */}
+      <Html 
+        position={[0, 0, 0]} 
+        center 
+        distanceFactor={7} // Controls the perspective scale (Lower = Larger text relative to distance)
+        style={{ pointerEvents: 'none' }}
+      >
+        <div className="flex flex-col items-center justify-center text-center w-40">
+            {/* Main Label */}
+            <div className={`
+              text-lg font-black font-mono tracking-widest uppercase leading-none
+              ${isSelected ? 'text-white' : 'text-white/90'}
+            `}
+            style={{ 
+              textShadow: '0 0 5px rgba(0,0,0,0.8), 0 0 10px black' // Stronger shadow for readability
+            }}
+            >
+              {label}
+            </div>
+
+            {/* Sub-label (Simulated Metric) */}
+            <div className="text-[10px] font-mono text-white/80 mt-1 font-bold" style={{ textShadow: '0 0 4px black' }}>
+               {Math.floor(Math.random() * 80 + 20)}% TRAFFIC
+            </div>
+        </div>
+      </Html>
+
+      {/* Selection Ring */}
+      {isSelected && (
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[1.2, 1.3, 32]} />
+          <meshBasicMaterial color="white" opacity={0.5} transparent />
+        </mesh>
+      )}
     </group>
   );
 });
 
+// --- CLUSTER ---
 const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect }) => {
   const bubbleRef = useRef();
   return (
     <group>
       {isSelected && <TransformControls object={bubbleRef} mode="translate" />}
-      <group position={position}><FeatureBubble ref={bubbleRef} label={label} color={color} isSelected={isSelected} onClick={(e) => { e.stopPropagation(); onSelect(id); }} /></group>
-      {/* Feature crowds behave normally (seek the bubble) */}
+      <group position={position}>
+        <FeatureBubble 
+          ref={bubbleRef} 
+          label={label} 
+          color={color} 
+          isSelected={isSelected} 
+          onClick={(e) => { e.stopPropagation(); onSelect(id); }} 
+        />
+      </group>
       <Crowd count={crowdCount} targetRef={bubbleRef} color={color} wander={false} />
     </group>
   );
 };
 
+// --- MAIN SCENE ---
 export default function Scene({ bubbles, activeId, setActiveId, totalUsers = 0 }) {
   
   const assignedUsers = bubbles.reduce((acc, b) => acc + (b.visible ? (b.count || 0) : 0), 0);
@@ -52,10 +109,10 @@ export default function Scene({ bubbles, activeId, setActiveId, totalUsers = 0 }
           <Vignette eskil={false} offset={0.1} darkness={1.1} />
         </EffectComposer>
 
-        {/* --- GREY CROWD (WANDERING) --- */}
+        {/* GREY CROWD */}
         <Crowd count={unassignedUsers} color="grey" wander={true} />
 
-        {/* --- COLORED CROWDS (FOCUSED) --- */}
+        {/* BUBBLES */}
         {bubbles.map((b) => {
           if (!b.visible) return null;
           return (
