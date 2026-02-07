@@ -2,41 +2,57 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Streamlined Click Lab</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Website</title>
     <style>
-        body { font-family: sans-serif; margin: 0; display: grid; grid-template-areas: "nav nav" "side main" "foot foot"; }
-        
-        /* Class 1: Top Navigation (Global Context) */
-        .zone-nav { grid-area: nav; background: #333; color: white; padding: 15px; text-align: center; }
+        /* Div 1: Header style */
+        #box-1 {
+            color: midnightblue;
+            border: 2px solid midnightblue;
+        }
 
-        /* Class 2: Sidebar (Secondary Navigation) */
-        .zone-sidebar { grid-area: side; width: 150px; background: #f0f0f0; padding: 20px; border-right: 1px solid #ddd; }
+        /* Div 2: Information style */
+        #box-2 {
+            color: darkslategray;
+            border: 2px dotted darkslategray;
+        }
 
-        /* Class 3: Main Action Area (The "Hero" zone) */
-        .zone-hero { grid-area: main; padding: 40px; text-align: center; }
+        /* Div 3: Button style */
+        #button-1 {
+            color: white;
+            background-color: crimson;
+            border: 3px solid black;
+        }
 
-        /* Class 4: Color Feature A (Primary Blue) */
-        .color-a-btn { background: #007bff; color: white; padding: 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        /* Div 4: Button style */
+        #button-2 {
+            color: forestgreen;
+            border: 5px double forestgreen;
+        }
 
-        /* Class 5: Color Feature B (Success Green) */
-        .color-b-btn { background: #28a745; color: white; padding: 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-left: 10px; }
-
-        .zone-footer { grid-area: foot; background: #eee; padding: 10px; font-size: 0.8rem; text-align: center; }
+        /* Simple pointer for the buttons */
+        .clickable {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
-    <div class="zone-nav">Header Zone</div>
-
-    <div class="zone-sidebar">Sidebar Options</div>
-
-    <div class="zone-hero">
-        <h2>Choose a Path</h2>
-        <button class="color-a-btn">Option A (Blue)</button>
-        <button class="color-b-btn">Option B (Green)</button>
+    <div id="box-1">
+        <h1>Welcome to My Site</h1>
     </div>
 
-    <div class="zone-footer">System Status: Active</div>
+    <div id="box-2">
+        <p>This layout uses four divs with strictly color and border styles.</p>
+    </div>
+
+    <div id="button-1" class="clickable">
+        <strong>Action One</strong>
+    </div>
+
+    <div id="button-2" class="clickable">
+        <strong>Action Two</strong>
+    </div>
 
 </body>
 </html>
