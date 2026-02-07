@@ -22,6 +22,9 @@ class HitRequest(BaseModel):
     y: Optional[float]
     div_id: Optional[str]
 
+class RunPipelineRequest(BaseModel):
+    html: str
+
 sampler = Sampler()
 map = {"btn-1" : 0, "hero-1": 1}
 
@@ -31,6 +34,13 @@ async def get_hit_count(body: HitRequest):
     print(count)
     return {"count": count}
 
+@app.post('/api/run_pipeline')
+async def run_pipeline(body: RunPipelineRequest):
+    # This method fetches the user uploaded html from the frontend
+    # Writes to csv to local
+
+    pass
+    
 
 if __name__ == '__main__':
     import uvicorn
