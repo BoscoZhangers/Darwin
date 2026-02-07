@@ -1,64 +1,55 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, onDisconnect, set, push, serverTimestamp } from "firebase/database";
+import { getDatabase, ref, onValue } from "firebase/database"; // Removed 'set' if unused
+import { getAuth, signInWithPopup, GithubAuthProvider, signOut } from "firebase/auth";
 
-// --- CONFIGURATION ---
-// In a real app, these would come from an environment variable or user input.
 const firebaseConfig = {
-  // Paste your REAL config here if you want Live Mode to actually work
-  apiKey: "AIzaSy...", 
-  authDomain: "hackathon.firebaseapp.com",
-  databaseURL: "https://hackathon-default-rtdb.firebaseio.com",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  // Add this line below:
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-let db;
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
-} catch (e) {
-  console.warn("Firebase not connected (Demo Mode Only).");
-}
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app); 
+export const auth = getAuth(app);
+const provider = new GithubAuthProvider();
 
-// --- HYBRID SUBSCRIPTION ---
-let simulationInterval;
+provider.addScope('repo'); 
 
-export const subscribeToSwarm = (callback, demoMode = true) => {
-  // 1. CLEANUP: Stop any previous listeners
-  if (simulationInterval) clearInterval(simulationInterval);
+// --- AUTH FUNCTIONS ---
+export const signInWithGithub = async () => {
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GithubAuthProvider.credentialFromResult(result);
+    const token = credential.accessToken;
+    const user = result.user;
+    return { user, token };
+  } catch (error) {
+    console.error("Auth Error:", error);
+    throw error;
+  }
+};
 
-  // 2. DEMO MODE (Synthesized Data) 🤖
-  if (demoMode) {
-    console.log("Switched to DEMO MODE");
-    let fakeCount = 124;
-    
-    // Immediate initial data
-    callback('users', fakeCount);
+export const logout = () => signOut(auth);
 
-    simulationInterval = setInterval(() => {
-      // Fluctuate users
-      const change = Math.floor(Math.random() * 5) - 2;
-      fakeCount = Math.max(50, fakeCount + change);
-      callback('users', fakeCount);
-
-      // Random fake clicks
-      if (Math.random() > 0.6) {
-        callback('events', { type: 'click', feature: 'signup' });
-      }
-    }, 1500);
-    return;
+// --- SWARM FUNCTIONS ---
+export const subscribeToSwarm = (callback, isDemoMode) => {
+  if (isDemoMode) {
+    return () => {}; 
   }
 
-  // 3. LIVE MODE (Real Data) 🔴
-  console.log("Switched to LIVE MODE");
-  if (!db) {
-    console.error("No Firebase Config found!");
-    return;
-  }
-
-  const usersRef = ref(db, 'active_users');
-  onValue(usersRef, (snapshot) => {
-    const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
-    callback('users', count);
-  });
+  // Use the 'db' instance created above
+  const countRef = ref(db, 'site_analytics/active_users');
   
-  // Real events listener would go here...
+  const unsubscribe = onValue(countRef, (snapshot) => {
+    const data = snapshot.val() || 0;
+    callback('users', data);
+  });
+
+  return unsubscribe;
 };
