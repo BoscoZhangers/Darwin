@@ -8,8 +8,12 @@ export default function RepoSelector({ token, user, onSelect, onLogout }) {
   const [search, setSearch] = useState('');
 
   const fetchRepos = async () => {
-    if (!token) return;
     setLoading(true);
+    if (!token) {
+      // No token yet — stop loading so the UI doesn't show an eternal spinner
+      setLoading(false);
+      return;
+    }
     const octokit = new Octokit({ auth: token });
     
     try {

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sphere, MeshDistortMaterial, Grid, Environment, TransformControls, Html } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
@@ -91,12 +91,14 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
 };
 
 // --- MAIN SCENE ---
-export default function Scene({ bubbles, activeId, setActiveId }) {
+export default function Scene({ bubbles }) {
   
   // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
   // 1. Count how many bubbles are actually visible
   const visibleBubbles = bubbles.filter(b => b.visible);
   const unassignedUsers = 150;
+
+  const [activeId, setActiveId] = useState();
   
   // 2. Divide total users among them (e.g., 100 users / 2 bubbles = 50 each)
   // const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
