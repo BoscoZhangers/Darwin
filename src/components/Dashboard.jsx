@@ -433,7 +433,13 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [darkMode]);
 
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
-  const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value}, '*'); } catch (e) {} };
+  const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value }, '*'); } catch (e) {} };
+
+  const [fileTree, setFileTree] = useState([]);
+  const [openTabs, setOpenTabs] = useState([]);
+  const [activeTab, setActiveTab] = useState(null);
+  const [fileContents, setFileContents] = useState({});
+  const [loadingFile, setLoadingFile] = useState(false);
 
   const handleDeleteBubble = (id) => { if (activeId === id) setActiveId(null); setBubbles(prev => prev.filter(b => b.id !== id)); };
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
@@ -543,6 +549,16 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
 
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
+  
+  // Updates state when typing in the new Editor area
+  const handleCodeChange = (path, newCode) => {
+    setFileContents(prev => ({ ...prev, [path]: newCode }));
+  };
+
+  const handleCodeUpdateFromPreview = (newCode) => { 
+    if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); 
+  };
+  
   
   // Updates state when typing in the new Editor area
   const handleCodeChange = (path, newCode) => {
