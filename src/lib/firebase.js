@@ -1,6 +1,12 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GithubAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { 
+  getAuth, 
+  GithubAuthProvider, 
+  signInWithPopup, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
+import { getDatabase, ref, onValue, query, limitToLast } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,31 +27,61 @@ export const signInWithGithub = async () => {
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GithubAuthProvider.credentialFromResult(result);
-    if (credential.accessToken) localStorage.setItem('gh_token', credential.accessToken);
-    return { user: result.user, token: credential.accessToken };
-  } catch (error) { console.error("Error signing in:", error); throw error; }
+    const token = credential.accessToken;
+    if (token) localStorage.setItem('gh_token', token);
+    return { user: result.user, token };
+  } catch (error) {
+    console.error("Error signing in:", error);
+    throw error;
+  }
 };
 
-export const signOut = async () => { localStorage.removeItem('gh_token'); return firebaseSignOut(auth); };
-export const subscribeToAuth = (callback) => { return onAuthStateChanged(auth, (user) => { const token = localStorage.getItem('gh_token'); callback(user, token); }); };
+export const signOut = async () => {
+  localStorage.removeItem('gh_token');
+  return firebaseSignOut(auth);
+};
 
+export const subscribeToAuth = (callback) => {
+  return onAuthStateChanged(auth, (user) => {
+    const token = localStorage.getItem('gh_token');
+    callback(user, token);
+  });
+};
+
+// --- SUBSCRIPTION FUNCTION ---
 export const subscribeToSwarm = (repoId, callback, demoMode = false) => {
   if (demoMode || !repoId) return () => {}; 
+  
   const safeRepoId = repoId.replace('/', '_').toLowerCase();
   
   const sessionsRef = ref(db, `swarm/${safeRepoId}/active_sessions`);
   const clicksRef = ref(db, `swarm/${safeRepoId}/clicks`);
+  const eventsRef = query(ref(db, `swarm/${safeRepoId}/events`), limitToLast(1));
 
-  // 1. Send Active User Count
+  // 1. LISTEN FOR FULL USER DATA (Required for Analytics & Counts)
   const unsubscribeSessions = onValue(sessionsRef, (snapshot) => {
-    const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
-    callback('users', count);
+    const data = snapshot.val();
+    // We send 'users_full' because Dashboard expects the object to calculate duration
+    callback('users_full', data || {}); 
   });
 
-  // 2. Send Click Data
+  // 2. LISTEN FOR CLICKS (For Bubble Sizes)
   const unsubscribeClicks = onValue(clicksRef, (snapshot) => {
     if (snapshot.exists()) callback('clicks', snapshot.val());
   });
 
-  return () => { unsubscribeSessions(); unsubscribeClicks(); };
+  // 3. LISTEN FOR EVENTS (Real-time pulses)
+  const unsubscribeEvents = onValue(eventsRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      const latestKey = Object.keys(data)[0];
+      callback('event', data[latestKey]);
+    }
+  });
+
+  return () => {
+    unsubscribeSessions();
+    unsubscribeClicks();
+    unsubscribeEvents();
+  };
 };

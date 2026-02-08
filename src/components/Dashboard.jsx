@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2 } from 'lucide-react';
 import Scene from './Scene';
+import AnalyticsPanel from './AnalyticsPanel';
 import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, PORT} from "../constants";
 
@@ -83,6 +84,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   return <iframe ref={iframeRef} srcDoc={srcDoc} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
 
+// --- 2. EDITOR UTILS ---
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-400">{part}</span>; return <span key={i} className="text-gray-300">{part}</span>; }); };
 const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSelect, onTabClose, onTabClick, loadingFile }) => { const [expandedFolders, setExpandedFolders] = useState(new Set(['src', 'components'])); const [selectedLine, setSelectedLine] = useState(null); const toggleFolder = (path) => { const next = new Set(expandedFolders); if (next.has(path)) next.delete(path); else next.add(path); setExpandedFolders(next); }; const renderTree = (items) => { if (!items) return null; return items.map((item) => { if (item.type === 'dir') { const isExpanded = expandedFolders.has(item.path); return ( <div key={item.path}> <div onClick={() => toggleFolder(item.path)} className="flex items-center gap-1 py-1 px-2 text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer select-none text-xs"> {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />} <Folder size={12} className="text-blue-400 shrink-0" /> <span className="truncate">{item.name}</span> </div> {isExpanded && item.children && <div className="pl-3 border-l border-white/5 ml-2">{renderTree(item.children)}</div>} </div> ); } return ( <div key={item.path} onClick={() => onFileSelect(item)} className={`flex items-center gap-2 py-1 px-2 cursor-pointer text-xs transition-colors ${activeTab === item.path ? 'bg-blue-500/20 text-blue-400 border-r-2 border-blue-500' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}> <FileCode size={12} className="shrink-0" /> <span className="truncate">{item.name}</span> </div> ); }); }; const renderCodeLines = () => { if (!activeTab || !fileContents[activeTab]) return null; return fileContents[activeTab].split('\n').map((line, index) => ( <div key={index} onClick={() => setSelectedLine(index + 1)} className={`flex text-xs leading-relaxed font-mono hover:bg-white/5 cursor-text ${selectedLine === index + 1 ? 'bg-[#264f78]/50' : ''}`}> <div className="w-12 shrink-0 text-right pr-4 text-gray-600 select-none border-r border-white/5 bg-[#1e1e1e]">{index + 1}</div> <div className="pl-4 whitespace-pre pr-4">{highlightSyntax(line)}</div> </div> )); }; return ( <div className="w-full h-full bg-[#1e1e1e] flex font-mono text-sm overflow-hidden"> <div className="w-56 bg-[#252526] border-r border-black/50 flex flex-col shrink-0"> <div className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest flex justify-between items-center bg-[#252526]">Explorer</div> <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">{renderTree(fileTree)}</div> </div> <div className="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]"> <div className="flex bg-[#2d2d2d] overflow-x-auto scrollbar-hide border-b border-black/20 h-9 shrink-0"> {openTabs.map(tabPath => ( <div key={tabPath} onClick={() => onTabClick(tabPath)} className={`group px-3 py-2 flex items-center gap-2 text-xs cursor-pointer min-w-[120px] max-w-[200px] border-r border-black/20 ${activeTab === tabPath ? 'bg-[#1e1e1e] text-white border-t-2 border-t-blue-500' : 'bg-[#2d2d2d] text-gray-500 hover:bg-[#252526]'}`}> <FileCode size={10} className={activeTab === tabPath ? 'text-blue-400' : 'text-gray-500'} /> <span className="truncate flex-1">{tabPath.split('/').pop()}</span> <button onClick={(e) => { e.stopPropagation(); onTabClose(tabPath); }} className="opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded p-0.5 transition-all"><X size={10} /></button> </div> ))} </div> <div className="flex-1 overflow-auto relative bg-[#1e1e1e]"> {loadingFile ? <div className="absolute inset-0 flex items-center justify-center text-gray-500 gap-2"><Loader2 size={20} className="animate-spin" /> Loading...</div> : activeTab && fileContents[activeTab] ? <div className="py-2 min-h-full">{renderCodeLines()}</div> : <div className="flex-1 flex flex-col items-center justify-center text-gray-600 h-full"><Globe size={48} className="opacity-20 mb-4" /><p className="text-xs">Select a file to edit</p></div>} </div> </div> </div> ); };
 
@@ -90,6 +92,8 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
 export default function Dashboard({ user, token, repo, onBack }) {
   const [viewMode, setViewMode] = useState('simulation'); 
   const [totalUsers, setTotalUsers] = useState(0);
+  const [rawUsers, setRawUsers] = useState({});
+  const [clicksData, setClicksData] = useState({}); 
   const [aiLog, setAiLog] = useState([{ role: 'system', text: `Connected to ${repo?.full_name}` }]);
   const [demoMode, setDemoMode] = useState(true); 
   const [rightPanelWidth, setRightPanelWidth] = useState(480);
@@ -114,18 +118,22 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
   const toggleExpand = (id) => { const next = new Set(expandedProperties); if(next.has(id)) next.delete(id); else next.add(id); setExpandedProperties(next); };
 
-  // --- LIVE USER TRACKING ---
+  // --- LIVE TRACKING ---
   useEffect(() => {
     if (demoMode || !repo) return;
     const repoId = repo.full_name;
 
     const unsubscribe = subscribeToSwarm(repoId, (type, data) => {
-      // 1. UPDATE USER COUNT (Grey People)
-      if (type === 'users') {
-        setTotalUsers(data);
+      if (type === 'users_full') {
+        const activeIds = data ? Object.keys(data) : [];
+        setTotalUsers(activeIds.length);
+        setRawUsers(data || {});
       }
-      // 2. UPDATE CLICKS (Colored People)
       if (type === 'clicks') {
+         // --- Capture Raw Data Immediately ---
+         setClicksData(data || {});
+         
+         // --- Update Visual Bubbles ---
          setBubbles(prevBubbles => 
             prevBubbles.map(bubble => {
               const newCount = data[bubble.label];
@@ -138,7 +146,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
     return () => unsubscribe && unsubscribe();
   }, [demoMode, repo]);
 
-  // --- REPO LOADING & EDITOR LOGIC ---
+  // (Keeping existing file loading & extraction logic)
   useEffect(() => { async function run_pipeline(contents) { const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: contents }) }); if (!resp.ok) return; await resp.json(); } async function initSync() { if (!token || !repo) return; const octokit = new Octokit({ auth: token }); try { setAiLog(prev => [...prev, { role: 'system', text: 'Fetching file tree...' }]); const { data: repoData } = await octokit.request('GET /repos/{owner}/{repo}', { owner: repo.owner.login, repo: repo.name }); const { data: treeData } = await octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1', { owner: repo.owner.login, repo: repo.name, tree_sha: repoData.default_branch }); const tree = []; const lookup = {}; treeData.tree.forEach(item => { const parts = item.path.split('/'); const fileName = parts[parts.length - 1]; const node = { ...item, name: fileName, children: [] }; lookup[item.path] = node; if (parts.length === 1) tree.push(node); else if (lookup[parts.slice(0, -1).join('/')]) lookup[parts.slice(0, -1).join('/')].children.push(node); }); const mapType = (nodes) => nodes.map(n => ({ ...n, type: n.type === 'tree' ? 'dir' : 'file', children: n.children ? mapType(n.children) : [] })); setFileTree(mapType(tree)); setAiLog(prev => [...prev, { role: 'success', text: 'File tree loaded.' }]); const appFile = treeData.tree.find(f => f.path === 'src/App.jsx'); if (appFile) { const contents = await handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' }); run_pipeline(contents); } } catch (err) { console.error(err); } } initSync(); }, [token, repo]);
   const handleUpdateLayout = (id, newX, newY) => { const fetchBackendCount = async () => { try { const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id }) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.id === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
   const handleFileSelect = async (file) => { if (file.type === 'dir') return; setOpenTabs(prev => { if (prev.includes(file.path)) return prev; return [...prev, file.path]; }); setActiveTab(file.path); if (fileContents[file.path]) return fileContents[file.path]; setLoadingFile(true); const octokit = new Octokit({ auth: token }); try { const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); const content = atob(data.content); setFileContents(prev => ({ ...prev, [file.path]: content })); return content; } catch (e) {console.error(e);} finally { setLoadingFile(false); } };
@@ -156,6 +164,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         <div className="w-10 h-10 bg-gradient-to-tr from-neon-blue to-neon-purple rounded-lg flex items-center justify-center font-bold text-xl">D</div>
         <div className="flex flex-col gap-4">
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue' : 'text-gray-500 hover:text-white'}`}><Layers size={20} /></button>
+            <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-400' : 'text-gray-500 hover:text-white'}`}><BarChart2 size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'text-neon-purple' : 'text-gray-500'}`}><Code size={20} /></button>
             <button onClick={() => setActivePanel('properties')} className={`p-3 rounded-xl transition-all ${activePanel === 'properties' ? 'text-green-400 bg-green-500/10' : 'text-gray-500 hover:text-white'}`}><Shapes size={20} /></button>
         </div>
@@ -164,7 +173,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
       <div className="flex-1 relative bg-[#0a0a0a] overflow-hidden flex flex-col">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
-             {/* --- PASS userCount HERE --- */}
              <Scene bubbles={bubbles} userCount={demoMode ? 50 : totalUsers} activeId={activeId} setActiveId={setActiveId} />
              {extractedGhost && (<div className="absolute inset-0 bg-blue-500/10 border-4 border-blue-500/50 flex items-center justify-center pointer-events-none z-10"><div className="bg-black/80 px-4 py-2 rounded text-blue-400 font-mono font-bold">DROP TO TRACK</div></div>)}
              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
@@ -184,6 +192,9 @@ export default function Dashboard({ user, token, repo, onBack }) {
                 </div>
              </div>
           </div>
+        ) : viewMode === 'analytics' ? (
+          // --- PASS RAW DATA ---
+          <AnalyticsPanel rawUsers={rawUsers} clicksData={clicksData} />
         ) : (
           <EditorWorkspace fileTree={fileTree} openTabs={openTabs} activeTab={activeTab} fileContents={fileContents} onFileSelect={handleFileSelect} onTabClose={handleTabClose} onTabClick={setActiveTab} loadingFile={loadingFile} />
         )}
