@@ -21,7 +21,7 @@ app.post('/api/generate_code', async (req, res) => {
     try {
       const { prompt, code } = req.body;
       
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
   
       const fullPrompt = `
         You are an expert React developer. 
