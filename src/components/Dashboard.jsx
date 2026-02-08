@@ -1,20 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, GitCommit, ArrowLeft, RotateCcw, Globe, Folder, File, X, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, Radio, MousePointer2, Plus, Eye, EyeOff } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick } from 'lucide-react';
 import Scene from './Scene';
 import { getDatabase, ref, onValue } from "firebase/database";
 import {APP_HOST, PORT} from "../constants";
 
 // --- VIBRANT PALETTE ---
 const NEON_PALETTE = [
-  "#00f3ff", // Cyan
-  "#bc13fe", // Neon Purple
-  "#ff0055", // Hot Pink
-  "#ccff00", // Lime
-  "#ffaa00", // Bright Orange
-  "#00ff99", // Spring Green
-  "#ff00ff", // Magenta
-  "#0099ff"  // Electric Blue
+  "#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"
 ];
 
 // --- 1. RUNTIME RENDERER (UNTOUCHED) ---
@@ -28,7 +21,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         const { index, x, y } = e.data;
         let matchCount = 0;
         const newCode = code.replace(
-          /<(nav|button|h1|div)\b([^>]*)>/g, 
+          /<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, 
           (fullMatch, tag, props) => {
             if (matchCount === index) {
                let newProps = props;
@@ -47,7 +40,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
 
       // HANDLE: Extraction Dragging (Live Mode)
       if (e.data.type === 'EXTRACT_COMPONENT') {
-         onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY);
+         onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -62,13 +55,13 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         .replace(/export default function/, 'function')
         .replace(/export default/, '')
         .replace(
-          /<(nav|button|h1|div)\b([^>]*)>/g, 
+          /<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, 
           (match, tag, props) => {
              const currentIndex = count++;
              return `<InteractiveElement _tag="${tag}" _darwinIndex={${currentIndex}}${props}>`;
           }
         )
-        .replace(/<\/(nav|button|h1|div)>/g, '</InteractiveElement>');
+        .replace(/<\/(nav|button|h1|div|section|header|p|span)>/g, '</InteractiveElement>');
     } catch (e) {
       return "";
     }
@@ -83,9 +76,11 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
         <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
         <style>
-           body { margin: 0; overflow: hidden; background: #fff; } 
-           .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; cursor: move; z-index: 1000; }
-           .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; z-index: 1000; }
+           body { margin: 0; overflow: hidden; background: #fff; user-select: none; } 
+           .mode-edit .darwin-draggable { cursor: move; }
+           .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; }
+           .mode-live .darwin-draggable { cursor: grab; }
+           .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }
         </style>
       </head>
       <body class="mode-${mode}">
@@ -110,12 +105,27 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
               e.preventDefault(); 
 
               if ('${mode}' === 'live') {
+                 // --- DATA CAPTURE (Safe) ---
+                 const rect = e.target.getBoundingClientRect();
+                 const computed = window.getComputedStyle(e.target);
+                 
+                 const meta = {
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    x: Math.round(rect.x),
+                    y: Math.round(rect.y),
+                    bgColor: computed.backgroundColor,
+                    color: computed.color,
+                    type: Tag 
+                 };
+
                  window.parent.postMessage({ 
                     type: 'EXTRACT_COMPONENT', 
-                    tag: '${mode}' === 'live' ? (props['data-darwin-id'] || props.id || _tag) : _tag,
+                    tag: props['data-darwin-id'] || props.id || Tag, 
                     id: _darwinIndex,
                     clientX: e.clientX,
-                    clientY: e.clientY
+                    clientY: e.clientY,
+                    meta: meta
                  }, '*');
                  return;
               }
@@ -126,19 +136,13 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
 
             useEffect(() => {
               if (!isDragging || '${mode}' === 'live') return;
-              
               const handleMove = (e) => {
                 let newX = e.clientX - dragOffset.current.x;
                 let newY = e.clientY - dragOffset.current.y;
                 if (newX < 0) newX = 0;
                 if (newY < 0) newY = 0;
-                const maxX = window.innerWidth - 50; 
-                const maxY = window.innerHeight - 20;
-                if (newX > maxX) newX = maxX;
-                if (newY > maxY) newY = maxY;
                 setPos({ x: newX, y: newY });
               };
-              
               const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y }, '*'); };
               window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp);
               return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
@@ -156,7 +160,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   return <iframe ref={iframeRef} srcDoc={srcDoc} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
 
-// --- 2. EDITOR (UNTOUCHED) ---
+// --- 2. EDITOR UTILS ---
 const highlightSyntax = (line) => {
   const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean);
   return parts.map((part, i) => {
@@ -232,35 +236,59 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [viewMode, setViewMode] = useState('simulation'); 
   const [totalUsers, setTotalUsers] = useState(0);
   const [aiLog, setAiLog] = useState([{ role: 'system', text: `Connected to ${repo?.full_name}` }]);
-  const [demoMode, setDemoMode] = useState(true); // True = Repo(Edit), False = Live(Extract)
+  const [demoMode, setDemoMode] = useState(true); 
   const [rightPanelWidth, setRightPanelWidth] = useState(480);
   const [isResizing, setIsResizing] = useState(false);
   const [bubbles, setBubbles] = useState([]);
-  const [activeId, setActiveId] = useState(null); // TRACK SELECTION
+  const [activeId, setActiveId] = useState(null); 
   
-  // NEW STATE: Switch between Logs and Properties
   const [activePanel, setActivePanel] = useState('logs');
+  const [expandedProperties, setExpandedProperties] = useState(new Set());
 
-  // Drag Extraction State
-  const [extractedGhost, setExtractedGhost] = useState(null); // { id, x, y }
+  const [extractedGhost, setExtractedGhost] = useState(null); 
 
-  // File System State
   const [fileTree, setFileTree] = useState([]);
   const [openTabs, setOpenTabs] = useState([]);
   const [activeTab, setActiveTab] = useState(null);
   const [fileContents, setFileContents] = useState({});
   const [loadingFile, setLoadingFile] = useState(false);
 
-  // NEW HELPERS
+  // --- SAFE HANDLERS (With Delay to Prevent 3D Crash) ---
   const handleDeleteBubble = (id) => {
-    setBubbles(prev => prev.filter(b => b.id !== id));
+    // 1. If we are deleting the CURRENTLY selected bubble, Deselect it first
+    if (activeId === id) {
+        setActiveId(null);
+        // Wait for next frame to delete
+        setTimeout(() => {
+            setBubbles(prev => prev.filter(b => b.id !== id));
+        }, 100);
+    } else {
+        // Safe to delete immediately
+        setBubbles(prev => prev.filter(b => b.id !== id));
+    }
   };
   
   const toggleVisibility = (id) => {
-    setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
+    // 1. If we are hiding the CURRENTLY selected bubble, Deselect it first
+    if (activeId === id) {
+        setActiveId(null);
+        // Wait for next frame to hide
+        setTimeout(() => {
+            setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
+        }, 100);
+    } else {
+        // Safe to toggle immediately
+        setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
+    }
   };
 
-  // --- REPO LOADING LOGIC (UNTOUCHED) ---
+  const toggleExpand = (id) => {
+    const next = new Set(expandedProperties);
+    if(next.has(id)) next.delete(id); else next.add(id);
+    setExpandedProperties(next);
+  };
+
+  // --- REPO LOADING LOGIC ---
   useEffect(() => {
     async function run_pipeline(contents) {
       const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", {
@@ -294,7 +322,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
     initSync();
   }, [token, repo]);
 
-  // --- 2. LAYOUT HANDLERS (UNTOUCHED) ---
   const handleUpdateLayout = (id, newX, newY) => {
     const fetchBackendCount = async () => {
       try {
@@ -335,15 +362,16 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
 
-  // --- DRAG EXTRACTION LOGIC (UNTOUCHED) ---
-  const handleExtractStart = (tag, id, clientX, clientY) => {
+  // --- DRAG EXTRACTION LOGIC ---
+  const handleExtractStart = (tag, id, clientX, clientY, meta) => {
     const iframeRect = document.querySelector('iframe')?.getBoundingClientRect();
     if (iframeRect) {
        setExtractedGhost({
          tag: tag || 'Component',
          id: id,
          x: iframeRect.left + clientX,
-         y: iframeRect.top + clientY
+         y: iframeRect.top + clientY,
+         meta: meta
        });
     }
   };
@@ -354,24 +382,23 @@ export default function Dashboard({ user, token, repo, onBack }) {
     const handleGlobalUp = (e) => {
        const sceneWidth = window.innerWidth - rightPanelWidth;
        if (e.clientX < sceneWidth) {
-          // --- DROP SUCCESSFUL! ---
-          // PICK A NEON COLOR
           const nextColor = NEON_PALETTE[bubbles.length % NEON_PALETTE.length];
+          const normalizedX = ((e.clientX / sceneWidth) - 0.5) * 20; 
+          const normalizedZ = ((e.clientY / window.innerHeight) - 0.5) * 20; 
           
           setBubbles(prev => {
-             // Avoid duplicates
              if(prev.find(b => b.id === extractedGhost.id)) return prev;
-             
              return [...prev, { 
                id: extractedGhost.id, // Use unique ID
                label: extractedGhost.tag, 
                count: 0, 
                visible: true,
-               color: nextColor // Assign vibrant color here
+               color: nextColor,
+               position: [normalizedX, 0, normalizedZ],
+               meta: extractedGhost.meta || {}
              }];
           });
           setAiLog(prev => [...prev, { role: 'success', text: `Added tracking for ${extractedGhost.tag}` }]);
-          // AUTO SWITCH TO PROPERTIES PANEL
           setActivePanel('properties'); 
        }
        setExtractedGhost(null); 
@@ -444,6 +471,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
       {/* Preview Panel */}
       <div style={{ width: rightPanelWidth }} className="flex flex-col bg-[#111] shrink-0 border-l border-white/5 relative">
+         {/* Ghost Element Overlay */}
          {extractedGhost && (
             <div 
                className="fixed z-50 pointer-events-none flex items-center gap-2 bg-[#bc13fe] text-white px-3 py-2 rounded-lg shadow-xl font-bold text-xs"
@@ -475,7 +503,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
            </div>
          </div>
          <div className="h-[25%] border-t border-white/10 flex flex-col bg-black/40">
-            {/* TABS HEADER (Logs vs Properties) */}
+            {/* TABS HEADER */}
             <div className="flex border-b border-white/10">
                <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-white/10 text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                   <Zap size={12} /> System Logs
@@ -499,20 +527,40 @@ export default function Dashboard({ user, token, repo, onBack }) {
                         <div className="text-gray-600 text-center py-8 italic">No active trackers. Drag elements from the preview here.</div>
                      ) : (
                         bubbles.map((b) => (
-                           <div key={b.id} className={`flex items-center justify-between p-2 rounded border border-white/5 hover:border-green-500/50 transition-colors group ${!b.visible ? 'bg-black/40 opacity-60' : 'bg-white/5'}`}>
-                              <div className="flex items-center gap-3">
-                                 <div className="w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]" style={{ color: b.color || '#00f3ff', backgroundColor: b.color || '#00f3ff' }} />
-                                 <span className="text-gray-300 font-bold">{b.label || 'Component'}</span>
-                                 <span className="text-gray-600 text-[9px] uppercase">#{b.id}</span>
+                           <div key={b.id} className={`bg-[#222] rounded overflow-hidden border border-transparent hover:border-white/10 transition-colors ${!b.visible ? 'opacity-50' : ''}`}>
+                              <div className="flex items-center justify-between p-2 hover:bg-[#333]">
+                                 <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleExpand(b.id)}>
+                                     {expandedProperties.has(b.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                                     <div className={`w-2 h-2 rounded-full ${b.visible ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-600'}`} style={{ backgroundColor: b.color || 'gray' }} />
+                                     <span className="text-gray-300 font-bold text-xs">{b.label || 'Component'}</span>
+                                     <span className="text-gray-500 text-[8px] uppercase tracking-wider ml-1">#{b.id}</span>
+                                 </div>
+                                 <div className="flex items-center gap-1">
+                                    <button onClick={(e) => { e.stopPropagation(); toggleVisibility(b.id); }} className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10">
+                                       {b.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                    </button>
+                                    <button 
+                                       onClick={(e) => { e.stopPropagation(); handleDeleteBubble(b.id); }} 
+                                       className="text-gray-500 hover:text-red-500 p-1 ml-2 transition-colors" // ALWAYS VISIBLE
+                                       title="Delete Tracker"
+                                    >
+                                       <Trash2 size={12} />
+                                    </button>
+                                 </div>
                               </div>
-                              <div className="flex items-center gap-1">
-                                 <button onClick={() => toggleVisibility(b.id)} className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10">
-                                    {b.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                                 </button>
-                                 <button onClick={() => handleDeleteBubble(b.id)} className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                    <Trash2 size={12} />
-                                 </button>
-                              </div>
+                              
+                              {/* DROPDOWN CONTENT */}
+                              {expandedProperties.has(b.id) && (
+                                <div className="bg-black/40 p-2 text-[9px] text-gray-400 space-y-1 border-t border-white/5">
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MousePointerClick size={10}/> Interactions</div> <span className="text-green-400 font-mono">{b.count}</span></div>
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Code size={10}/> Type</div> <span className="text-white font-mono">{b.meta?.type || 'Unknown'}</span></div>
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Move size={10}/> Dimensions</div> <span>{b.meta?.width}x{b.meta?.height}</span></div>
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MapPin size={10}/> Position</div> <span>{b.meta?.x}, {b.meta?.y}</span></div>
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Palette size={10}/> Color</div> 
+                                       <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full border border-white/20" style={{backgroundColor: b.meta?.bgColor}}></div> <span className="font-mono">{b.meta?.color}</span></div>
+                                   </div>
+                                </div>
+                              )}
                            </div>
                         ))
                      )}
