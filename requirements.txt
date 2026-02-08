@@ -2,3 +2,5 @@ pandas
 torch
 scikit-learn
 numpy
+seaborn
+google-genai
