@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
 
-FEATURES = ["x", "y", "div_id"]
+FEATURES = ['x', 'y', 'div_category', 'border-width', 'top', 'left', 'color_R',
+       'color_G', 'color_B', 'border-color_R', 'border-color_G',
+       'border-color_B', 'background-color_R', 'background-color_G',
+       'background-color_B', 'border-style_dashed', 'border-style_double',
+       'border-style_solid', 'position_absolute', 'cursor_pointer']
 NUM_FEATURES = len(FEATURES)
 
 NUM_DIVS = 5
