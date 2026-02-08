@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon } from 'lucide-react';
 import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
 import { subscribeToSwarm } from '../lib/firebase';
@@ -8,9 +8,24 @@ import {APP_HOST, PORT} from "../constants";
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 
-// --- 1. RUNTIME RENDERER (Unchanged) ---
-const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart }) => {
+// --- 1. RUNTIME RENDERER ---
+const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
+
+  const sendSelection = useCallback(() => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ 
+        type: 'SYNC_SELECTION', 
+        id: activeId, 
+        color: activeColor 
+      }, '*');
+    }
+  }, [activeId, activeColor]);
+
+  useEffect(() => {
+    sendSelection();
+  }, [sendSelection]);
+
   useEffect(() => {
     const handleMessage = (e) => {
       if (e.data.type === 'UPDATE_POS') {
@@ -80,11 +95,39 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
     } catch (e) { return ""; }
   };
 
-  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">const { useState, useEffect, useRef } = React; const DarwinTracker = () => null; const InteractiveElement = ({ _tag: Tag, _darwinIndex, children, style, ...props }) => { const isAbsolute = style && style.position === 'absolute'; const hasId = props['data-darwin-id'] || props.id; const canInteract = isAbsolute || ('${mode}' === 'live' && hasId); if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; const [pos, setPos] = useState({ x: parseInt(style?.left || 0), y: parseInt(style?.top || 0) }); const [isDragging, setIsDragging] = useState(false); const dragOffset = useRef({ x: 0, y: 0 }); const handleMouseDown = (e) => { e.stopPropagation(); e.preventDefault(); if ('${mode}' === 'live') { const rect = e.target.getBoundingClientRect(); const computed = window.getComputedStyle(e.target); const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag }; window.parent.postMessage({ type: 'EXTRACT_COMPONENT', tag: props['data-darwin-id'] || props.id || Tag, id: _darwinIndex, clientX: e.clientX, clientY: e.clientY, meta: meta }, '*'); return; } setIsDragging(true); dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }; }; useEffect(() => { if (!isDragging || '${mode}' === 'live') return; const handleMove = (e) => { let newX = e.clientX - dragOffset.current.x; let newY = e.clientY - dragOffset.current.y; if (newX < 0) newX = 0; if (newY < 0) newY = 0; setPos({ x: newX, y: newY }); }; const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y }, '*'); }; window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp); return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); }; }, [isDragging, pos]); return <Tag style={{ ...style, left: pos.x, top: pos.y }} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; }; try { ${prepareTransformedCode()} const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />); } catch (err) { document.body.innerHTML = '<div style="color:red; padding:20px">Preview Error: ' + err.message + '</div>'; } </script></body></html>`;
-  return <iframe ref={iframeRef} srcDoc={srcDoc} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
+  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">const { useState, useEffect, useRef } = React; const DarwinTracker = () => null; 
+  const InteractiveElement = ({ _tag: Tag, _darwinIndex, children, style, ...props }) => { 
+    const isAbsolute = style && style.position === 'absolute'; 
+    const hasId = props['data-darwin-id'] || props.id; 
+    const canInteract = isAbsolute || ('${mode}' === 'live' && hasId); 
+    const [highlightColor, setHighlightColor] = useState(null);
+    useEffect(() => {
+      const handleMsg = (e) => {
+        if (e.data.type === 'SYNC_SELECTION') {
+           if (e.data.id == _darwinIndex) {
+              setHighlightColor(e.data.color || '#00f3ff');
+           } else {
+              setHighlightColor(null);
+           }
+        }
+      };
+      window.addEventListener('message', handleMsg);
+      return () => window.removeEventListener('message', handleMsg);
+    }, [_darwinIndex]);
+    if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; 
+    const [pos, setPos] = useState({ x: parseInt(style?.left || 0), y: parseInt(style?.top || 0) }); 
+    const [isDragging, setIsDragging] = useState(false); 
+    const dragOffset = useRef({ x: 0, y: 0 }); 
+    const handleMouseDown = (e) => { e.stopPropagation(); e.preventDefault(); if ('${mode}' === 'live') { const rect = e.target.getBoundingClientRect(); const computed = window.getComputedStyle(e.target); const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag }; window.parent.postMessage({ type: 'EXTRACT_COMPONENT', tag: props['data-darwin-id'] || props.id || Tag, id: _darwinIndex, clientX: e.clientX, clientY: e.clientY, meta: meta }, '*'); return; } setIsDragging(true); dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }; }; 
+    useEffect(() => { if (!isDragging || '${mode}' === 'live') return; const handleMove = (e) => { let newX = e.clientX - dragOffset.current.x; let newY = e.clientY - dragOffset.current.y; if (newX < 0) newX = 0; if (newY < 0) newY = 0; setPos({ x: newX, y: newY }); }; const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y }, '*'); }; window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp); return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); }; }, [isDragging, pos]); 
+    const activeStyle = highlightColor ? { outline: '2px solid ' + highlightColor, boxShadow: '0 0 15px ' + highlightColor + ', inset 0 0 10px ' + highlightColor, zIndex: 9999, position: isAbsolute ? 'absolute' : 'relative', transition: 'all 0.2s ease' } : {};
+    return <Tag style={{ ...style, ...activeStyle, left: pos.x, top: pos.y }} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
+  }; 
+  try { ${prepareTransformedCode()} const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />); } catch (err) { document.body.innerHTML = '<div style="color:red; padding:20px">Preview Error: ' + err.message + '</div>'; } </script></body></html>`;
+  return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
 
-// --- 2. EDITOR UTILS ---
+// --- 2. EDITOR UTILS (Unchanged) ---
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
 const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSelect, onTabClose, onTabClick, loadingFile }) => { const [expandedFolders, setExpandedFolders] = useState(new Set(['src', 'components'])); const [selectedLine, setSelectedLine] = useState(null); const toggleFolder = (path) => { const next = new Set(expandedFolders); if (next.has(path)) next.delete(path); else next.add(path); setExpandedFolders(next); }; const renderTree = (items) => { if (!items) return null; return items.map((item) => { if (item.type === 'dir') { const isExpanded = expandedFolders.has(item.path); return ( <div key={item.path}> <div onClick={() => toggleFolder(item.path)} className="flex items-center gap-1 py-1 px-2 text-gray-500 hover:text-black hover:bg-gray-200 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 cursor-pointer select-none text-xs"> {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />} <Folder size={12} className="text-blue-500 dark:text-blue-400 shrink-0" /> <span className="truncate">{item.name}</span> </div> {isExpanded && item.children && <div className="pl-3 border-l border-gray-300 dark:border-white/5 ml-2">{renderTree(item.children)}</div>} </div> ); } return ( <div key={item.path} onClick={() => onFileSelect(item)} className={`flex items-center gap-2 py-1 px-2 cursor-pointer text-xs transition-colors ${activeTab === item.path ? 'bg-blue-100 text-blue-600 border-r-2 border-blue-500 dark:bg-blue-500/20 dark:text-blue-400' : 'text-gray-600 hover:text-black hover:bg-gray-200 dark:text-gray-500 dark:hover:text-white dark:hover:bg-white/5'}`}> <FileCode size={12} className="shrink-0" /> <span className="truncate">{item.name}</span> </div> ); }); }; const renderCodeLines = () => { if (!activeTab || !fileContents[activeTab]) return null; return fileContents[activeTab].split('\n').map((line, index) => ( <div key={index} onClick={() => setSelectedLine(index + 1)} className={`flex text-xs leading-relaxed font-mono hover:bg-gray-100 dark:hover:bg-white/5 cursor-text ${selectedLine === index + 1 ? 'bg-blue-100 dark:bg-[#264f78]/50' : ''}`}> <div className="w-12 shrink-0 text-right pr-4 text-gray-400 dark:text-gray-600 select-none border-r border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#1e1e1e]">{index + 1}</div> <div className="pl-4 whitespace-pre pr-4">{highlightSyntax(line)}</div> </div> )); }; return ( <div className="w-full h-full bg-white dark:bg-[#1e1e1e] flex font-mono text-sm overflow-hidden"> <div className="w-56 bg-gray-50 border-r border-gray-200 dark:bg-[#252526] dark:border-black/50 flex flex-col shrink-0"> <div className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest flex justify-between items-center bg-gray-100 dark:bg-[#252526]">Explorer</div> <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">{renderTree(fileTree)}</div> </div> <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#1e1e1e]"> <div className="flex bg-gray-100 border-b border-gray-200 dark:bg-[#2d2d2d] dark:border-black/20 h-9 shrink-0 overflow-x-auto scrollbar-hide"> {openTabs.map(tabPath => ( <div key={tabPath} onClick={() => onTabClick(tabPath)} className={`group px-3 py-2 flex items-center gap-2 text-xs cursor-pointer min-w-[120px] max-w-[200px] border-r border-gray-200 dark:border-black/20 ${activeTab === tabPath ? 'bg-white text-gray-900 border-t-2 border-t-blue-500 dark:bg-[#1e1e1e] dark:text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-[#2d2d2d] dark:hover:bg-[#252526]'}`}> <FileCode size={10} className={activeTab === tabPath ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} /> <span className="truncate flex-1">{tabPath.split('/').pop()}</span> <button onClick={(e) => { e.stopPropagation(); onTabClose(tabPath); }} className="opacity-0 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 rounded p-0.5 transition-all"><X size={10} /></button> </div> ))} </div> <div className="flex-1 overflow-auto relative bg-white dark:bg-[#1e1e1e]"> {loadingFile ? <div className="absolute inset-0 flex items-center justify-center text-gray-500 gap-2"><Loader2 size={20} className="animate-spin" /> Loading...</div> : activeTab && fileContents[activeTab] ? <div className="py-2 min-h-full">{renderCodeLines()}</div> : <div className="flex-1 flex flex-col items-center justify-center text-gray-400 h-full"><Globe size={48} className="opacity-20 mb-4" /><p className="text-xs">Select a file to edit</p></div>} </div> </div> </div> ); };
 
@@ -96,7 +139,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [clicksData, setClicksData] = useState({}); 
   const [aiLog, setAiLog] = useState([{ role: 'system', text: `Connected to ${repo?.full_name}` }]);
   const [demoMode, setDemoMode] = useState(true); 
-  // --- THEME STATE ---
   const [darkMode, setDarkMode] = useState(true); 
   
   const [rightPanelWidth, setRightPanelWidth] = useState(480);
@@ -108,7 +150,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [expandedProperties, setExpandedProperties] = useState(new Set());
   const [extractedGhost, setExtractedGhost] = useState(null); 
 
-  // Toggle Theme Class on HTML element
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -130,11 +171,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
   const toggleExpand = (id) => { const next = new Set(expandedProperties); if(next.has(id)) next.delete(id); else next.add(id); setExpandedProperties(next); };
 
-  // --- LIVE TRACKING ---
+  const getActiveColor = () => {
+    const bubble = bubbles.find(b => b.id === activeId);
+    return bubble ? bubble.color : null;
+  };
+
   useEffect(() => {
     if (demoMode || !repo) return;
     const repoId = repo.full_name;
-
     const unsubscribe = subscribeToSwarm(repoId, (type, data) => {
       if (type === 'users_full') {
         const activeIds = data ? Object.keys(data) : [];
@@ -151,11 +195,9 @@ export default function Dashboard({ user, token, repo, onBack }) {
          );
       }
     }, demoMode);
-
     return () => unsubscribe && unsubscribe();
   }, [demoMode, repo]);
 
-  // (Keeping existing file loading & extraction logic)
   useEffect(() => { async function run_pipeline(contents) { const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: contents }) }); if (!resp.ok) return; await resp.json(); } async function initSync() { if (!token || !repo) return; const octokit = new Octokit({ auth: token }); try { setAiLog(prev => [...prev, { role: 'system', text: 'Fetching file tree...' }]); const { data: repoData } = await octokit.request('GET /repos/{owner}/{repo}', { owner: repo.owner.login, repo: repo.name }); const { data: treeData } = await octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1', { owner: repo.owner.login, repo: repo.name, tree_sha: repoData.default_branch }); const tree = []; const lookup = {}; treeData.tree.forEach(item => { const parts = item.path.split('/'); const fileName = parts[parts.length - 1]; const node = { ...item, name: fileName, children: [] }; lookup[item.path] = node; if (parts.length === 1) tree.push(node); else if (lookup[parts.slice(0, -1).join('/')]) lookup[parts.slice(0, -1).join('/')].children.push(node); }); const mapType = (nodes) => nodes.map(n => ({ ...n, type: n.type === 'tree' ? 'dir' : 'file', children: n.children ? mapType(n.children) : [] })); setFileTree(mapType(tree)); setAiLog(prev => [...prev, { role: 'success', text: 'File tree loaded.' }]); const appFile = treeData.tree.find(f => f.path === 'src/App.jsx'); if (appFile) { const contents = await handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' }); run_pipeline(contents); } } catch (err) { console.error(err); } } initSync(); }, [token, repo]);
   const handleUpdateLayout = (id, newX, newY) => { const fetchBackendCount = async () => { try { const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id }) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.id === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
   const handleFileSelect = async (file) => { if (file.type === 'dir') return; setOpenTabs(prev => { if (prev.includes(file.path)) return prev; return [...prev, file.path]; }); setActiveTab(file.path); if (fileContents[file.path]) return fileContents[file.path]; setLoadingFile(true); const octokit = new Octokit({ auth: token }); try { const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); const content = atob(data.content); setFileContents(prev => ({ ...prev, [file.path]: content })); return content; } catch (e) {console.error(e);} finally { setLoadingFile(false); } };
@@ -163,7 +205,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
 
-  // --- DUPLICATE CHECK & ERROR LOGGING ---
   useEffect(() => {
     if (!extractedGhost) return;
     const handleGlobalMove = (e) => { setExtractedGhost(prev => ({ ...prev, x: e.clientX, y: e.clientY })); };
@@ -221,7 +262,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
       <div className="flex-1 relative bg-gray-200 dark:bg-[#0a0a0a] overflow-hidden flex flex-col transition-colors duration-300">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
-             <Scene bubbles={bubbles} userCount={demoMode ? 50 : totalUsers} activeId={activeId} setActiveId={setActiveId} />
+             {/* FIXED: Added darkMode prop back so the scene knows the state */}
+             <Scene bubbles={bubbles} userCount={demoMode ? 50 : totalUsers} activeId={activeId} setActiveId={setActiveId} darkMode={darkMode} />
              {extractedGhost && (<div className="absolute inset-0 bg-blue-500/10 border-4 border-blue-500/50 flex items-center justify-center pointer-events-none z-10"><div className="bg-black/80 px-4 py-2 rounded text-blue-400 font-mono font-bold">DROP TO TRACK</div></div>)}
              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
                 <div className="bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 pl-6 pr-2 py-2 rounded-full flex items-center gap-6 shadow-2xl transition-colors">
@@ -255,7 +297,15 @@ export default function Dashboard({ user, token, repo, onBack }) {
            <div className="flex flex-col h-full bg-white dark:bg-[#1e1e1e]">
               <div className="h-10 flex items-center justify-between px-4 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-black/20"><span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2"><Globe size={12}/> Live Preview</span><div className={`text-[10px] px-2 rounded flex items-center gap-1 ${demoMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400'}`}>{demoMode ? 'EDIT MODE' : 'EXTRACT MODE'}</div></div>
               <div className="flex-1 bg-white relative">
-                 <IframeRenderer code={fileContents['src/App.jsx'] || ''} onUpdateCode={handleCodeUpdateFromPreview} handleUpdateLayout={handleUpdateLayout} mode={demoMode ? 'edit' : 'live'} onExtractStart={handleExtractStart} />
+                 <IframeRenderer 
+                    code={fileContents['src/App.jsx'] || ''} 
+                    onUpdateCode={handleCodeUpdateFromPreview} 
+                    handleUpdateLayout={handleUpdateLayout} 
+                    mode={demoMode ? 'edit' : 'live'} 
+                    onExtractStart={handleExtractStart} 
+                    activeId={activeId}
+                    activeColor={getActiveColor()}
+                 />
               </div>
            </div>
          </div>
