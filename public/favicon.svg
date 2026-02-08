@@ -1,0 +1,9 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="darwin-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" /> <stop offset="100%" stop-color="#a855f7" /> </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="6" fill="#111111"/>
+  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" 
+        fill="url(#darwin-grad)" font-family="sans-serif" font-weight="900" font-size="20">D</text>
+</svg>
