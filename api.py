@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any
 import random
 from train.model_sampler import Sampler
+from google import genai
+import os
+import re
 
 app = FastAPI()
 
@@ -16,6 +19,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+api_key = os.getenv("GEMINI_API_KEY")  # or replace with your key string
+client = genai.Client(api_key=api_key)
 
 class HitRequest(BaseModel):
     x: Optional[float]
@@ -28,6 +33,10 @@ class RunPipelineRequest(BaseModel):
 
 sampler = Sampler()
 
+@app.get("/")
+async def health():
+    return {"text": "Hello world!"}
+
 @app.post('/api/get_hit_count')
 async def get_hit_count(body: HitRequest):
     count = int(sampler.sample(body.x, body.y, body.div_id, body.predict_other))
@@ -36,13 +45,36 @@ async def get_hit_count(body: HitRequest):
     print(count)
     return {"count": count}
 
-# @app.post('/api/run_pipeline')
-# async def run_pipeline(body: RunPipelineRequest):
-#     # This method fetches the user uploaded html from the frontend
-#     # Writes to csv to local
+# Request body schema
+class GenerateCodeRequest(BaseModel):
+    prompt: str
+    code: str
 
-#     pass
-    
+
+@app.post("/api/generate_code")
+async def generate_code(request: GenerateCodeRequest):
+    try:
+        full_prompt = f"""
+        You are an expert React developer.
+        Update this App.jsx code based on this request: "{request.prompt}"
+        EXISTING CODE: {request.code}
+        Return ONLY the raw code string. No markdown.
+        """
+
+        response = client.models.generate_content(
+            model='gemini-3-flash-preview',
+            contents=full_prompt)
+        text = response.text
+
+        # Remove markdown code fences if present
+        cleaned_code = re.sub(r"```jsx|```", "", text).strip()
+
+        return {"code": cleaned_code}
+
+    except Exception as error:
+        print("❌ SERVER CRASH DETAILS:")
+        print("Message:", str(error))
+        raise HTTPException(status_code=500, detail=str(error))
 
 if __name__ == '__main__':
     import uvicorn
