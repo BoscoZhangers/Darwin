@@ -1,11 +1,27 @@
-// Inside your app.post('/api/generate_code', ...) block in server.js
+import express from 'express';
+import cors from 'cors'; // Required to allow your frontend to talk to the backend
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import dotenv from 'dotenv'; // loads .env automatically
+
+const app = express();
+const PORT = 3001; // Matches the port your frontend is looking for
+
+// 1. Setup Middleware
+app.use(cors()); 
+app.use(express.json());
+
+dotenv.config({ path: ".env.local" });
+
+const apiKey = process.env.GOOGLE_API_KEY_DARWIN;
+
+// 2. Initialize Gemini (Replace 'YOUR_API_KEY' with your actual key)
+const genAI = new GoogleGenerativeAI(apiKey);
 
 app.post('/api/generate_code', async (req, res) => {
     try {
       const { prompt, code } = req.body;
       
-      // Use the official Gemini 3 Flash identifier
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   
       const fullPrompt = `
         You are an expert React developer. 
@@ -21,15 +37,13 @@ app.post('/api/generate_code', async (req, res) => {
       res.json({ code: text.replace(/```jsx|```/g, "").trim() });
   
     } catch (error) {
-      // This logs the ACTUAL reason to your terminal
       console.error("❌ SERVER CRASH DETAILS:");
       console.error("Message:", error.message);
-      
-      // Check if it's an API Key or Region issue
-      if (error.status === 403 || error.status === 401) {
-          console.error("Critical: Your API Key is invalid or restricted.");
-      }
-  
       res.status(500).json({ error: error.message });
     }
-  });
+});
+
+// 3. START THE SERVER (This is why you were getting a connection error)
+app.listen(PORT, () => {
+    console.log(`✅ Backend is running at http://localhost:${PORT}`);
+});
