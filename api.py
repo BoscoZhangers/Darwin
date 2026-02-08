@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any
 import random
 from train.model_sampler import Sampler
-from data.model_agent import nn_model
 
 app = FastAPI()
 

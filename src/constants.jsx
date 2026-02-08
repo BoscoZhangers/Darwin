@@ -1,3 +1,3 @@
 const HOST = "localhost";
-export const APP_HOST = "http://" + HOST + ":";
-export const PORT = "8001";
+export const APP_HOST = "http://localhost";
+export const PORT = ":3001";
