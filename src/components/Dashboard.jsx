@@ -16,14 +16,26 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
 
   useEffect(() => {
     const handleMessage = (e) => {
+      const escapeRegExp = (s) => (s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // HANDLE: CSS Layout Dragging (Repo Mode)
       if (e.data.type === 'UPDATE_POS') {
-        const { index, x, y } = e.data;
+        const { index, x, y, dataDarwinId } = e.data;
         let matchCount = 0;
         const newCode = code.replace(
           /<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, 
           (fullMatch, tag, props) => {
-            if (matchCount === index) {
+            let shouldUpdate = false;
+
+            // If a data-darwin-id was provided from the iframe, prefer matching by that attribute
+            if (dataDarwinId) {
+              const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + escapeRegExp(dataDarwinId) + '["\']');
+              const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + escapeRegExp(dataDarwinId) + '["\']');
+              if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
+            } else if (typeof index === 'number') {
+              if (matchCount === index) shouldUpdate = true;
+            }
+
+            if (shouldUpdate) {
                let newProps = props;
                if (newProps.match(/left:\s*\d+/)) newProps = newProps.replace(/left:\s*(\d+)/, `left: ${Math.round(x)}`);
                if (newProps.match(/top:\s*\d+/)) newProps = newProps.replace(/top:\s*(\d+)/, `top: ${Math.round(y)}`);
@@ -31,20 +43,30 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                return `<${tag}${newProps}>`;
             }
             matchCount++;
-            return fullMatch; 
+            return fullMatch;
           }
         );
         if (newCode !== code) onUpdateCode(newCode);
-        handleUpdateLayout(index, x, y);
+        handleUpdateLayout(dataDarwinId || index, x, y);
       }
 
       // HANDLE: STYLE UPDATE (from Properties Panel)
       if (e.data.type === 'UPDATE_STYLE') {
-        const { index, attr, value } = e.data;
+        const { index, dataDarwinId, attr, value } = e.data;
         let matchCount = 0;
         const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
         const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
-          if (matchCount === index) {
+          let shouldUpdate = false;
+          if (dataDarwinId || typeof index === 'string') {
+            const idToMatch = dataDarwinId || index;
+            const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + idToMatch + '["\']');
+            const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + idToMatch + '["\']');
+            if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
+          } else if (typeof index === 'number') {
+            if (matchCount === index) shouldUpdate = true;
+          }
+
+          if (shouldUpdate) {
             let newProps = props;
 
             // 1) attr="value" pattern (e.g., data-* or direct attr)
@@ -193,7 +215,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                 if (newY < 0) newY = 0;
                 setPos({ x: newX, y: newY });
               };
-              const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y }, '*'); };
+              const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y, dataDarwinId: props['data-darwin-id'] || props.id }, '*'); };
               window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp);
               return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
             }, [isDragging, pos]);
@@ -312,7 +334,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
     setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b));
     // Post to window so the IframeRenderer's parent-level message handler
     // picks it up and applies the same regex-based patch to the source code.
-    try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value }, '*'); } catch (e) {}
+    try { window.postMessage({ type: 'UPDATE_STYLE', index: id, dataDarwinId: id, attr: prop, value }, '*'); } catch (e) {}
   };
 
   const [fileTree, setFileTree] = useState([]);
@@ -419,6 +441,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [token, repo]);
 
   const handleUpdateLayout = (id, newX, newY) => {
+    console.log(id)
     const fetchBackendCount = async () => {
       try {
         const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', {
