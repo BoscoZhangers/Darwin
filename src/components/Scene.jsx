@@ -48,7 +48,6 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick, sca
                  style={{ textShadow: '0 0 10px rgba(0,0,0,0.8)' }}>
               {label}
             </div>
-            {/* UPDATED: Shows raw interaction count instead of growth percentage */}
             <div className="text-[10px] font-mono text-white/80 mt-1 font-bold" style={{ textShadow: '0 0 4px black' }}>
                 {count} INTERACTIONS
             </div>
@@ -104,7 +103,7 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
           isSelected={isSelected} 
           onClick={(e) => { e.stopPropagation(); onSelect(id); }} 
           scale={targetScale}
-          count={crowdCount} // <--- Passing the count down
+          count={crowdCount} 
         />
       </group>
       <Crowd count={crowdCount} targetRef={bubbleRef} color={color} wander={false} />
@@ -127,9 +126,10 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
         onPointerMissed={(e) => e.type === 'click' && setActiveId(null)} 
         gl={{ antialias: true }}
       >
-        {/* Dynamic Background */}
         <color attach="background" args={[bgColor]} />
-        <fog attach="fog" args={[bgColor, 10, 50]} />
+        
+        {/* CONDITIONAL FOG: Only render in Dark Mode */}
+        {darkMode && <fog attach="fog" args={[bgColor, 10, 50]} />}
 
         <ambientLight intensity={darkMode ? 0.4 : 0.8} />
         <pointLight position={[10, 10, 10]} intensity={1.0} color="#ffffff" />
@@ -137,15 +137,15 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
         
         <OrbitControls makeDefault minDistance={5} maxDistance={50} maxPolarAngle={Math.PI / 2.05} />
         
+        {/* UPDATED GRID: fadeDistance increased from 50 -> 250 */}
         <Grid 
           infiniteGrid 
-          fadeDistance={50} 
+          fadeDistance={100} 
           sectionColor={gridSection} 
           cellColor={gridCell} 
           position={[0, -0.05, 0]} 
         />
         
-        {/* Post-Processing */}
         <EffectComposer disableNormalPass>
           <Bloom 
             luminanceThreshold={1} 
