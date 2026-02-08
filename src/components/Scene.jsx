@@ -96,7 +96,7 @@ export default function Scene({ bubbles }) {
   // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
   // 1. Count how many bubbles are actually visible
   const visibleBubbles = bubbles.filter(b => b.visible);
-  const unassignedUsers = 150;
+  const unassignedUsers = 50;
 
   const [activeId, setActiveId] = useState();
   
