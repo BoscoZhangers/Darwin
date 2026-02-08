@@ -74,6 +74,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                 const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
                 if (stylePropRegex.test(inner)) inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
                 else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
+                inner = inner.replace(/''/g, "");
                 newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
               } else {
                 const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
@@ -419,7 +420,24 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                 <div className="bg-gray-50 dark:bg-black/40 p-2 text-[9px] text-gray-600 dark:text-gray-400 space-y-1 border-t border-gray-200 dark:border-white/5">
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MousePointerClick size={10}/> Interactions</div> <span className="text-green-600 dark:text-green-400 font-mono">{b.count}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Code size={10}/> Type</div> <span className="text-black dark:text-white font-mono">{b.meta?.type || 'Unknown'}</span></div>
-                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Move size={10}/> Dimensions</div> <span>{b.meta?.width}x{b.meta?.height}</span></div>
+                                   <div className="flex items-center justify-between">
+                                     <div className="flex items-center gap-1"><Move size={10}/> Dimensions</div>
+                                     <div className="flex items-center gap-2">
+                                       <input
+                                         type="number"
+                                         value={b.meta?.width ? parseInt(b.meta.width) : ''}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'width', v); }}
+                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                       />
+                                       <span className="text-gray-500">x</span>
+                                       <input
+                                         type="number"
+                                         value={b.meta?.height ? parseInt(b.meta.height) : ''}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'height', v); }}
+                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                       />
+                                     </div>
+                                   </div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MapPin size={10}/> Position</div> <span>{b.meta?.x}, {b.meta?.y}</span></div>
                                    <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1"><Palette size={10}/> Color</div>
