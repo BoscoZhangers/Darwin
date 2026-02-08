@@ -331,7 +331,8 @@ def __main__():
 csv_path = 'grouped_df.csv' if "data" in os.getcwd() else './data/grouped_df.csv'
 def nn_model(df = pd.read_csv(csv_path), NUM_DIVS = 5, EMBEDDING_DIM = 256, INNER_LAYER_SIZE = 128, TRAIN_EPOCHES = 4000, predict_x = None, predict_y = None, predict_id = None, predict_other = None, 
                 predict_ref = vectorize_css(webpage)[0]):
-    FEATURES = [col for col in df.columns if col != 'hits']
+    
+    FEATURES = [col for col in df.columns if col != 'hits'][1:]
     NUM_FEATURES = len(FEATURES)
 
     class Predictor(nn.Module):
@@ -393,7 +394,7 @@ def nn_model(df = pd.read_csv(csv_path), NUM_DIVS = 5, EMBEDDING_DIM = 256, INNE
             print(f"Actual Clicks: {y_sample.item():.2f}")
         return prediction
 
-    file_path = 'train.pth' if "data" in os.getcwd() else './data/train.pth'
+    file_path = 'FINALtrain.pth' if "data" in os.getcwd() else './data/FINALtrain.pth'
 
     def pipeline():
         X = df[FEATURES].copy()
@@ -447,7 +448,7 @@ def nn_model(df = pd.read_csv(csv_path), NUM_DIVS = 5, EMBEDDING_DIM = 256, INNE
             else:
                 new_attributes.append(row[1])
         print(np.array([predict_x, predict_y, conversion_table[predict_id]]+ new_attributes))
-        x_predict = torch.tensor(np.array([predict_x, predict_y, conversion_table[predict_id]]+ new_attributes), dtype=torch.float32)
+        x_predict = torch.tensor(np.nan_to_num(np.array([predict_x, predict_y, conversion_table[predict_id]]+ new_attributes), nan=-1.0), dtype=torch.float32)
 
         model = Predictor() # Predictor class instantiated with global NUM_FEATURES from previous cell
         model.load_state_dict(torch.load(file_path))
