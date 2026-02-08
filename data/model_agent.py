@@ -394,7 +394,7 @@ def nn_model(df = pd.read_csv(csv_path), NUM_DIVS = 5, EMBEDDING_DIM = 256, INNE
             print(f"Actual Clicks: {y_sample.item():.2f}")
         return prediction
 
-    file_path = 'FINALtrain.pth' if "data" in os.getcwd() else './data/FINALtrain.pth'
+    file_path = 'train_25ht.pth' if "data" in os.getcwd() else './data/train_25ht.pth'
 
     def pipeline():
         X = df[FEATURES].copy()
@@ -459,7 +459,7 @@ if __name__ == "__main__":
     #
     # feature_df, initial_df = __main__()
 
-    feature_df, initial_df = pd.read_csv("./data/grouped_df.csv"), vectorize_css(webpage)[0]
+    feature_df, initial_df = pd.read_csv("./data/pain.csv"), vectorize_css(webpage)[0]
 
     while True:
         location = input("Input x y div_id. type 'N' to exit: ")
