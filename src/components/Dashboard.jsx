@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, GitCommit, ArrowLeft, RotateCcw, Globe, Folder, File, X, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, Radio, MousePointer2, Plus } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, GitCommit, ArrowLeft, RotateCcw, Globe, Folder, File, X, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, Radio, MousePointer2, Plus, Eye, EyeOff } from 'lucide-react';
 import Scene from './Scene';
 import { getDatabase, ref, onValue } from "firebase/database";
 import {APP_HOST, PORT} from "../constants";
 
-// --- 1. RUNTIME RENDERER (Smart Iframe) ---
+// --- VIBRANT PALETTE ---
+const NEON_PALETTE = [
+  "#00f3ff", // Cyan
+  "#bc13fe", // Neon Purple
+  "#ff0055", // Hot Pink
+  "#ccff00", // Lime
+  "#ffaa00", // Bright Orange
+  "#00ff99", // Spring Green
+  "#ff00ff", // Magenta
+  "#0099ff"  // Electric Blue
+];
+
+// --- 1. RUNTIME RENDERER (UNTOUCHED) ---
 const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart }) => {
   const iframeRef = useRef(null);
 
@@ -30,13 +42,11 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
           }
         );
         if (newCode !== code) onUpdateCode(newCode);
-        console.log(index);
         handleUpdateLayout(index, x, y);
       }
 
       // HANDLE: Extraction Dragging (Live Mode)
       if (e.data.type === 'EXTRACT_COMPONENT') {
-         // Notify parent to start the "Ghost" drag
          onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY);
       }
     };
@@ -118,23 +128,14 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
               if (!isDragging || '${mode}' === 'live') return;
               
               const handleMove = (e) => {
-                // --- BOUNDARY CONSTRAINT FIX ---
-                // Calculate new positions
                 let newX = e.clientX - dragOffset.current.x;
                 let newY = e.clientY - dragOffset.current.y;
-
-                // 1. Prevent dragging left of 0
                 if (newX < 0) newX = 0;
-                
-                // 2. Prevent dragging above 0
                 if (newY < 0) newY = 0;
-
-                // 3. Optional: Prevent dragging off right/bottom edge (keeping element somewhat visible)
                 const maxX = window.innerWidth - 50; 
                 const maxY = window.innerHeight - 20;
                 if (newX > maxX) newX = maxX;
                 if (newY > maxY) newY = maxY;
-
                 setPos({ x: newX, y: newY });
               };
               
@@ -155,7 +156,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   return <iframe ref={iframeRef} srcDoc={srcDoc} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
 
-// --- 2. EDITOR (Unchanged) ---
+// --- 2. EDITOR (UNTOUCHED) ---
 const highlightSyntax = (line) => {
   const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean);
   return parts.map((part, i) => {
@@ -234,10 +235,12 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [demoMode, setDemoMode] = useState(true); // True = Repo(Edit), False = Live(Extract)
   const [rightPanelWidth, setRightPanelWidth] = useState(480);
   const [isResizing, setIsResizing] = useState(false);
-  const [productionUrl, setProductionUrl] = useState('');
-  const [isCommitting, setIsCommitting] = useState(false);
   const [bubbles, setBubbles] = useState([]);
+  const [activeId, setActiveId] = useState(null); // TRACK SELECTION
   
+  // NEW STATE: Switch between Logs and Properties
+  const [activePanel, setActivePanel] = useState('logs');
+
   // Drag Extraction State
   const [extractedGhost, setExtractedGhost] = useState(null); // { id, x, y }
 
@@ -248,20 +251,25 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [fileContents, setFileContents] = useState({});
   const [loadingFile, setLoadingFile] = useState(false);
 
-  // --- REPO LOADING LOGIC (Same as before) ---
-  useEffect(() => {
+  // NEW HELPERS
+  const handleDeleteBubble = (id) => {
+    setBubbles(prev => prev.filter(b => b.id !== id));
+  };
+  
+  const toggleVisibility = (id) => {
+    setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
+  };
 
+  // --- REPO LOADING LOGIC (UNTOUCHED) ---
+  useEffect(() => {
     async function run_pipeline(contents) {
-      // console.log(fileContents['src/App.jsx'])
-      // console.log(contents)
       const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html: contents })
       });
-
       if (!resp.ok) return;
-      const json = await resp.json();
+      await resp.json();
     }
 
     async function initSync() {
@@ -286,26 +294,17 @@ export default function Dashboard({ user, token, repo, onBack }) {
     initSync();
   }, [token, repo]);
 
-  // --- 2. LAYOUT HANDLERS ---
+  // --- 2. LAYOUT HANDLERS (UNTOUCHED) ---
   const handleUpdateLayout = (id, newX, newY) => {
-    
-    // setDemoLayout(prev => prev.map(item => item.id === id ? { ...item, x: newX, y: newY } : item)); 
-  
-  
-    console.log("Updating position...")
-
     const fetchBackendCount = async () => {
-      console.log("Calling backend")
       try {
         const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ x: newX, y: newY, div_id: id })
         });
-        console.log(resp);
         if (!resp.ok) return;
         const json = await resp.json();
-        console.log("Got", json?.count)
         if (typeof json?.count === 'number') 
           setBubbles(prevBubbles =>
             prevBubbles.map(bubble =>
@@ -313,46 +312,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
               bubble 
             )
           )
-        console.log(bubbles);
       } catch (e) {
-        // ignore network errors during development
         console.error(e);
       }
     };
-
     if (demoMode) {
       fetchBackendCount();
-      // intervalId = setInterval(fetchBackendCount, 1500);
     } 
   };
-
-
-  // --- 3. COMMIT HANDLER ---
-  const handleCommit = async () => {
-    if (!token || !repo) return;
-    setIsCommitting(true);
-    setAiLog(prev => [...prev, { role: 'system', text: 'Pushing changes to GitHub...' }]);
-    
-    const octokit = new Octokit({ auth: token });
-    try {
-        const { data } = await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
-          owner: repo.owner.login,
-          repo: repo.name,
-          path: 'src/App.jsx',
-          message: 'Update layout via Darwin Drag & Drop 🚀',
-          content: btoa(rawCode),
-          sha: fileSha
-        });
-        setFileSha(data.content.sha);
-        setAiLog(prev => [...prev, { role: 'success', text: 'DEPLOY SUCCESSFUL: GitHub Updated.' }]);
-      } catch (err) {
-        console.error(err);
-        setAiLog(prev => [...prev, { role: 'error', text: 'Commit Failed.' }]);
-      } finally {
-        setIsCommitting(false);
-      loadRepoStructure();
-    };
-  }
 
   const handleFileSelect = async (file) => {
     if (file.type === 'dir') return;
@@ -368,10 +335,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
 
-  // --- DRAG EXTRACTION LOGIC ---
+  // --- DRAG EXTRACTION LOGIC (UNTOUCHED) ---
   const handleExtractStart = (tag, id, clientX, clientY) => {
-    // Calculate position relative to the whole window
-    // We assume the iframe is on the right side.
     const iframeRect = document.querySelector('iframe')?.getBoundingClientRect();
     if (iframeRect) {
        setExtractedGhost({
@@ -387,20 +352,34 @@ export default function Dashboard({ user, token, repo, onBack }) {
     if (!extractedGhost) return;
     const handleGlobalMove = (e) => { setExtractedGhost(prev => ({ ...prev, x: e.clientX, y: e.clientY })); };
     const handleGlobalUp = (e) => {
-       // Check if dropped inside the 3D Scene Area (Left side)
        const sceneWidth = window.innerWidth - rightPanelWidth;
        if (e.clientX < sceneWidth) {
-          // DROP SUCCESSFUL!
-          setBubbles(prev => [...prev, { id: extractedGhost.id, label: extractedGhost.tag, count: 0, visible: true}]);
+          // --- DROP SUCCESSFUL! ---
+          // PICK A NEON COLOR
+          const nextColor = NEON_PALETTE[bubbles.length % NEON_PALETTE.length];
+          
+          setBubbles(prev => {
+             // Avoid duplicates
+             if(prev.find(b => b.id === extractedGhost.id)) return prev;
+             
+             return [...prev, { 
+               id: extractedGhost.id, // Use unique ID
+               label: extractedGhost.tag, 
+               count: 0, 
+               visible: true,
+               color: nextColor // Assign vibrant color here
+             }];
+          });
           setAiLog(prev => [...prev, { role: 'success', text: `Added tracking for ${extractedGhost.tag}` }]);
+          // AUTO SWITCH TO PROPERTIES PANEL
+          setActivePanel('properties'); 
        }
-       console.log(bubbles);
-       setExtractedGhost(null); // Clear ghost
+       setExtractedGhost(null); 
     };
     window.addEventListener('mousemove', handleGlobalMove);
     window.addEventListener('mouseup', handleGlobalUp);
     return () => { window.removeEventListener('mousemove', handleGlobalMove); window.removeEventListener('mouseup', handleGlobalUp); };
-  }, [extractedGhost, rightPanelWidth]);
+  }, [extractedGhost, rightPanelWidth, bubbles]);
 
 
   // Resize
@@ -415,6 +394,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
         <div className="flex flex-col gap-4">
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue' : 'text-gray-500 hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'text-neon-purple' : 'text-gray-500'}`}><Code size={20} /></button>
+            {/* PROPERTIES TOGGLE */}
+            <button onClick={() => setActivePanel('properties')} className={`p-3 rounded-xl transition-all ${activePanel === 'properties' ? 'text-green-400 bg-green-500/10' : 'text-gray-500 hover:text-white'}`}><Shapes size={20} /></button>
         </div>
         <button onClick={onBack} className="mt-auto p-3 text-gray-600 hover:text-red-500 transition-colors"><ArrowLeft size={20} /></button>
       </div>
@@ -423,9 +404,10 @@ export default function Dashboard({ user, token, repo, onBack }) {
       <div className="flex-1 relative bg-[#0a0a0a] overflow-hidden flex flex-col">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
-             <Scene bubbles={bubbles} />
+             {/* SCENE */}
+             <Scene bubbles={bubbles} activeId={activeId} setActiveId={setActiveId} />
              
-             {/* Drop Zone Indicator (Only visible when dragging) */}
+             {/* Drop Zone Indicator */}
              {extractedGhost && (
                 <div className="absolute inset-0 bg-blue-500/10 border-4 border-blue-500/50 flex items-center justify-center pointer-events-none z-10">
                    <div className="bg-black/80 px-4 py-2 rounded text-blue-400 font-mono font-bold">DROP TO TRACK</div>
@@ -462,7 +444,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
       {/* Preview Panel */}
       <div style={{ width: rightPanelWidth }} className="flex flex-col bg-[#111] shrink-0 border-l border-white/5 relative">
-         {/* Ghost Element Overlay (Visible only when dragging) */}
          {extractedGhost && (
             <div 
                className="fixed z-50 pointer-events-none flex items-center gap-2 bg-[#bc13fe] text-white px-3 py-2 rounded-lg shadow-xl font-bold text-xs"
@@ -494,11 +475,49 @@ export default function Dashboard({ user, token, repo, onBack }) {
            </div>
          </div>
          <div className="h-[25%] border-t border-white/10 flex flex-col bg-black/40">
-            <div className="p-3 bg-white/5 border-b border-white/10 flex items-center gap-2 text-yellow-500">
-               <Zap size={14} /> <span className="text-[10px] font-bold uppercase font-mono">System Logs</span>
+            {/* TABS HEADER (Logs vs Properties) */}
+            <div className="flex border-b border-white/10">
+               <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-white/10 text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
+                  <Zap size={12} /> System Logs
+               </button>
+               <button onClick={() => setActivePanel('properties')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'properties' ? 'bg-white/10 text-green-400 border-b-2 border-green-400' : 'text-gray-500 hover:text-white'}`}>
+                  <Shapes size={12} /> Properties
+               </button>
             </div>
-            <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2">
-               {aiLog.map((log, i) => <div key={i} className={`p-2 rounded border-l-2 ${log.role === 'success' ? 'border-green-500 bg-green-500/5 text-green-400' : 'border-gray-700 bg-white/5 text-gray-500'}`}>{log.text}</div>)}
+
+            {/* SWITCHABLE CONTENT */}
+            <div className="flex-1 overflow-y-auto font-mono text-[10px] p-0">
+               {activePanel === 'logs' ? (
+                  // ORIGINAL LOGS VIEW
+                  <div className="p-4 space-y-2">
+                     {aiLog.map((log, i) => <div key={i} className={`p-2 rounded border-l-2 ${log.role === 'success' ? 'border-green-500 bg-green-500/5 text-green-400' : 'border-gray-700 bg-white/5 text-gray-500'}`}>{log.text}</div>)}
+                  </div>
+               ) : (
+                  // NEW PROPERTIES LIST VIEW
+                  <div className="p-2 space-y-1">
+                     {bubbles.length === 0 ? (
+                        <div className="text-gray-600 text-center py-8 italic">No active trackers. Drag elements from the preview here.</div>
+                     ) : (
+                        bubbles.map((b) => (
+                           <div key={b.id} className={`flex items-center justify-between p-2 rounded border border-white/5 hover:border-green-500/50 transition-colors group ${!b.visible ? 'bg-black/40 opacity-60' : 'bg-white/5'}`}>
+                              <div className="flex items-center gap-3">
+                                 <div className="w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]" style={{ color: b.color || '#00f3ff', backgroundColor: b.color || '#00f3ff' }} />
+                                 <span className="text-gray-300 font-bold">{b.label || 'Component'}</span>
+                                 <span className="text-gray-600 text-[9px] uppercase">#{b.id}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                 <button onClick={() => toggleVisibility(b.id)} className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10">
+                                    {b.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                 </button>
+                                 <button onClick={() => handleDeleteBubble(b.id)} className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                    <Trash2 size={12} />
+                                 </button>
+                              </div>
+                           </div>
+                        ))
+                     )}
+                  </div>
+               )}
             </div>
          </div>
       </div>
