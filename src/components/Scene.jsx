@@ -32,18 +32,26 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
   const bubbleRef = useRef();
   return (
     <group>
-      {isSelected && <TransformControls object={bubbleRef} mode="translate" />}
+      {isSelected && (
+        <TransformControls 
+          object={bubbleRef} 
+          mode="translate"
+          // --- FIX FOR ARROW GLITCH ---
+          size={1.4}          // Larger than sphere to stick out clearly
+          depthTest={false}   // Renders ON TOP of sphere (X-Ray), preventing "inward" illusion
+          renderOrder={999}   // Ensures it's drawn last
+          lineWidth={2}
+        />
+      )}
       <group position={position}>
         <FeatureBubble ref={bubbleRef} label={label} color={color} isSelected={isSelected} onClick={(e) => { e.stopPropagation(); onSelect(id); }} />
       </group>
-      {/* COLOURED CROWD (Based on Clicks) */}
       <Crowd count={crowdCount} targetRef={bubbleRef} color={color} wander={false} />
     </group>
   );
 };
 
 export default function Scene({ bubbles, userCount, activeId, setActiveId }) {
-  // Use the passed userCount, default to 50 if missing
   const crowdSize = userCount !== undefined ? userCount : 50;
 
   return (
@@ -60,10 +68,8 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId }) {
           <Vignette eskil={false} offset={0.1} darkness={1.1} />
         </EffectComposer>
 
-        {/* GREY CROWD (Based on Active Users) */}
         <Crowd count={crowdSize} color="grey" wander={true} />
 
-        {/* BUBBLES */}
         {bubbles.map((b) => {
           if (!b.visible) return null;
           return <BubbleCluster key={b.id} {...b} crowdCount={b.count} isSelected={activeId === b.id} onSelect={setActiveId} />;
