@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit, Sparkles, Check, MessageSquare } from 'lucide-react';
 import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
 import { subscribeToSwarm } from '../lib/firebase';
@@ -28,26 +28,11 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
 
   useEffect(() => {
     const handleMessage = (e) => {
-      const escapeRegExp = (s) => (s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // HANDLE: CSS Layout Dragging (Repo Mode)
       if (e.data.type === 'UPDATE_POS') {
-        const { index, x, y, dataDarwinId } = e.data;
+        const { index, x, y } = e.data;
         let matchCount = 0;
-        const newCode = code.replace(
-          /<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, 
-          (fullMatch, tag, props) => {
-            let shouldUpdate = false;
-
-            // If a data-darwin-id was provided from the iframe, prefer matching by that attribute
-            if (dataDarwinId) {
-              const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + escapeRegExp(dataDarwinId) + '["\']');
-              const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + escapeRegExp(dataDarwinId) + '["\']');
-              if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
-            } else if (typeof index === 'number') {
-              if (matchCount === index) shouldUpdate = true;
-            }
-
-            if (shouldUpdate) {
+        const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
+            if (matchCount === index) {
                let newProps = props;
                if (newProps.match(/left:\s*\d+/)) newProps = newProps.replace(/left:\s*(\d+)/, `left: ${Math.round(x)}`);
                if (newProps.match(/top:\s*\d+/)) newProps = newProps.replace(/top:\s*(\d+)/, `top: ${Math.round(y)}`);
@@ -55,28 +40,17 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                return `<${tag}${newProps}>`;
             }
             matchCount++;
-            return fullMatch;
-          }
-        );
+            return fullMatch; 
+        });
         if (newCode !== code) onUpdateCode(newCode);
-        handleUpdateLayout(dataDarwinId || index, x, y);
+        handleUpdateLayout(index, x, y);
       }
       if (e.data.type === 'UPDATE_STYLE') {
-        const { index, dataDarwinId, attr, value } = e.data;
+        const { index, attr, value } = e.data;
         let matchCount = 0;
         const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
         const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
-          let shouldUpdate = false;
-          if (dataDarwinId || typeof index === 'string') {
-            const idToMatch = dataDarwinId || index;
-            const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + idToMatch + '["\']');
-            const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + idToMatch + '["\']');
-            if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
-          } else if (typeof index === 'number') {
-            if (matchCount === index) shouldUpdate = true;
-          }
-
-          if (shouldUpdate) {
+          if (matchCount === index) {
             let newProps = props;
             const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
             if (attrEqRegex.test(newProps)) {
@@ -89,7 +63,6 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                 const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
                 if (stylePropRegex.test(inner)) inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
                 else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
-                inner = inner.replace(/''/g, "");
                 newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
               } else {
                 const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
@@ -154,13 +127,12 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
 
-// --- 2. EDITOR UTILS (Re-engineered for Overlay) ---
+// --- 2. EDITOR UTILS (Unchanged) ---
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
 
 const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSelect, onTabClose, onTabClick, onCodeChange, onSave, loadingFile, isSaving }) => { 
   const [expandedFolders, setExpandedFolders] = useState(new Set(['src', 'components'])); 
   
-  // Refs for sync scrolling
   const textareaRef = useRef(null);
   const codeBgRef = useRef(null);
   const lineNumRef = useRef(null);
@@ -210,15 +182,11 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
 
   return ( 
     <div className="w-full h-full bg-white dark:bg-[#1e1e1e] flex font-mono text-sm overflow-hidden"> 
-      {/* File Tree */}
       <div className="w-56 bg-gray-50 border-r border-gray-200 dark:bg-[#252526] dark:border-black/50 flex flex-col shrink-0"> 
         <div className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest flex justify-between items-center bg-gray-100 dark:bg-[#252526]">Explorer</div> 
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">{renderTree(fileTree)}</div> 
       </div> 
-      
-      {/* Editor Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#1e1e1e]"> 
-        {/* Tab Bar */}
         <div className="flex bg-gray-100 border-b border-gray-200 dark:bg-[#2d2d2d] dark:border-black/20 h-9 shrink-0 overflow-x-auto scrollbar-hide justify-between"> 
           <div className="flex overflow-x-auto">
             {openTabs.map(tabPath => ( 
@@ -244,31 +212,22 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
             </button>
           )}
         </div> 
-        
-        {/* Main Editing Area */}
         <div className="flex-1 flex relative overflow-hidden bg-white dark:bg-[#1e1e1e]">
           {loadingFile ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500 gap-2"><Loader2 size={20} className="animate-spin" /> Loading...</div> 
           ) : activeTab && fileContents[activeTab] !== undefined ? (
             <>
-                {/* Line Numbers Column */}
                 <div ref={lineNumRef} className="w-12 bg-gray-50 dark:bg-[#1e1e1e] border-r border-gray-200 dark:border-white/5 overflow-hidden text-right pr-3 pt-4 select-none">
                     {lines.map((_, i) => (
                         <div key={i} className="h-5 text-xs text-gray-400 dark:text-gray-600 leading-5">{i + 1}</div>
                     ))}
                 </div>
-
-                {/* Layered Editor */}
                 <div className="relative flex-1 h-full overflow-hidden">
-                    {/* Layer 1: Syntax Highlighter (Background) */}
                     <div ref={codeBgRef} className="absolute inset-0 p-4 overflow-hidden pointer-events-none whitespace-pre font-mono text-xs leading-5">
                        {lines.map((line, i) => (
                           <div key={i} className="h-5">{highlightSyntax(line)}</div>
                        ))}
                     </div>
-
-                    {/* Layer 2: Textarea (Foreground) */}
-                    {/* wrap="off" ensures horizontal scrolling */}
                     <textarea
                        ref={textareaRef}
                        onScroll={handleScroll}
@@ -289,7 +248,7 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
   ); 
 };
 
-// --- 3. MAIN DASHBOARD (Unchanged Logic, just renders new components) ---
+// --- 3. MAIN DASHBOARD ---
 export default function Dashboard({ user, token, repo, onBack }) {
   const [viewMode, setViewMode] = useState('simulation'); 
   const [totalUsers, setTotalUsers] = useState(0);
@@ -307,6 +266,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [activePanel, setActivePanel] = useState('logs');
   const [expandedProperties, setExpandedProperties] = useState(new Set());
   const [extractedGhost, setExtractedGhost] = useState(null); 
+
+  // AI State
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [proposedCode, setProposedCode] = useState(null);
 
   // --- EDITOR STATE ---
   const [fileTree, setFileTree] = useState([]);
@@ -358,7 +322,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
     return () => unsubscribe && unsubscribe();
   }, [demoMode, repo]);
 
-
   // --- GIT SYNC & FILE LOADING ---
   useEffect(() => { 
     async function run_pipeline(contents) { 
@@ -388,7 +351,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
     initSync(); 
   }, [token, repo]);
 
-  // --- COMMIT CHANGES ---
   const handleCommitChanges = async () => {
     if (!activeTab || !fileContents[activeTab] || !token || !repo) return;
     setIsSaving(true);
@@ -418,6 +380,69 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
   };
 
+  // --- AI GENERATION ---
+  // Find the handleAiGenerate function in Dashboard.jsx and replace it with this:
+const handleAiGenerate = async () => {
+  if (!aiPrompt.trim()) return;
+  setIsAiGenerating(true);
+  
+  // Safety check: Ensure the URL is formed correctly
+  const apiUrl = `${APP_HOST}${PORT}/api/generate_code`;
+  
+  try {
+      const currentCode = fileContents['src/App.jsx'] || '';
+      
+      setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
+
+      const resp = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              prompt: aiPrompt,
+              code: currentCode
+          })
+      });
+
+      if (!resp.ok) {
+          const errorData = await resp.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server responded with ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      if (data.code) {
+          setProposedCode(data.code);
+          setAiLog(prev => [...prev, { role: 'success', text: 'AI generated a new version of App.jsx. Review above!' }]);
+      } else {
+          throw new Error("AI returned empty code.");
+      }
+
+  } catch (err) {
+      console.error("AI Assistant Error:", err);
+      
+      // Detailed error logging for the UI
+      let errorMessage = "AI Generation Failed.";
+      if (err.message.includes("Failed to fetch")) {
+          errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
+      } else {
+          errorMessage = `AI Error: ${err.message}`;
+      }
+
+      setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
+      setActivePanel('logs'); // Auto-switch to logs so you see the error
+  } finally {
+      setIsAiGenerating(false);
+  }
+};
+
+  const handleAcceptAi = () => {
+      if (proposedCode) {
+          setFileContents(prev => ({ ...prev, ['src/App.jsx']: proposedCode }));
+          setProposedCode(null);
+          setAiPrompt("");
+          setAiLog(prev => [...prev, { role: 'success', text: 'AI Changes Applied' }]);
+      }
+  };
+
   const handleFileSelect = async (file) => { 
     if (file.type === 'dir') return; 
     setOpenTabs(prev => { if (prev.includes(file.path)) return prev; return [...prev, file.path]; }); 
@@ -435,16 +460,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
 
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
-  
-  // Updates state when typing in the new Editor area
-  const handleCodeChange = (path, newCode) => {
-    setFileContents(prev => ({ ...prev, [path]: newCode }));
-  };
-
-  const handleCodeUpdateFromPreview = (newCode) => { 
-    if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); 
-  };
-  
+  const handleCodeChange = (path, newCode) => { setFileContents(prev => ({ ...prev, [path]: newCode })); };
+  const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
   const handleUpdateLayout = (id, newX, newY) => { const fetchBackendCount = async () => { try { const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id }) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.id === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
 
@@ -484,6 +501,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue bg-blue-50 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-500 bg-yellow-50 dark:text-yellow-400 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><BarChart2 size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'text-purple-600 bg-purple-50 dark:text-neon-purple dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Code size={20} /></button>
+            {/* NEW AI ICON */}
+            <button onClick={() => setActivePanel('ai')} className={`p-3 rounded-xl transition-all ${activePanel === 'ai' ? 'text-pink-600 bg-pink-50 dark:text-pink-400 dark:bg-pink-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Sparkles size={20} /></button>
             <button onClick={() => setActivePanel('properties')} className={`p-3 rounded-xl transition-all ${activePanel === 'properties' ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Shapes size={20} /></button>
         </div>
         <div className="mt-auto flex flex-col gap-4 items-center">
@@ -531,6 +550,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
         )}
       </div>
       <div onMouseDown={() => setIsResizing(true)} className={`w-1 cursor-col-resize transition-colors ${isResizing ? 'bg-neon-blue' : 'bg-gray-200 hover:bg-gray-300 dark:bg-white/5 dark:hover:bg-neon-blue/40'}`} />
+      
+      {/* RIGHT PANEL */}
       <div style={{ width: rightPanelWidth }} className="flex flex-col bg-white dark:bg-[#111] shrink-0 border-l border-gray-200 dark:border-white/5 relative transition-colors duration-300">
          {extractedGhost && (<div className="fixed z-50 pointer-events-none flex items-center gap-2 bg-[#bc13fe] text-white px-3 py-2 rounded-lg shadow-xl font-bold text-xs" style={{ left: extractedGhost.x, top: extractedGhost.y, transform: 'translate(-50%, -50%)' }}><MousePointer2 size={14} className="fill-white" /><span>{extractedGhost.tag}</span><div className="bg-white text-[#bc13fe] px-1.5 rounded text-[10px]">+ ADD</div></div>)}
          <div className="h-1/2">
@@ -538,7 +559,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
               <div className="h-10 flex items-center justify-between px-4 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-black/20"><span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2"><Globe size={12}/> Live Preview</span><div className={`text-[10px] px-2 rounded flex items-center gap-1 ${demoMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400'}`}>{demoMode ? 'EDIT MODE' : 'EXTRACT MODE'}</div></div>
               <div className="flex-1 bg-white relative">
                  <IframeRenderer 
-                    code={fileContents['src/App.jsx'] || ''} 
+                    code={proposedCode || fileContents['src/App.jsx'] || ''}  // PREVIEW PROPOSED CODE IF AVAILABLE
                     onUpdateCode={handleCodeUpdateFromPreview} 
                     handleUpdateLayout={handleUpdateLayout} 
                     mode={demoMode ? 'edit' : 'live'} 
@@ -553,9 +574,47 @@ export default function Dashboard({ user, token, repo, onBack }) {
             <div className="flex border-b border-gray-200 dark:border-white/10">
                <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-yellow-50 text-yellow-600 border-b-2 border-yellow-500 dark:bg-white/10 dark:text-yellow-500' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Zap size={12} /> System Logs</button>
                <button onClick={() => setActivePanel('properties')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'properties' ? 'bg-green-50 text-green-600 border-b-2 border-green-500 dark:bg-white/10 dark:text-green-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Shapes size={12} /> Properties</button>
+               {/* NEW AI TAB BUTTON */}
+               <button onClick={() => setActivePanel('ai')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'ai' ? 'bg-pink-50 text-pink-600 border-b-2 border-pink-500 dark:bg-white/10 dark:text-pink-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Sparkles size={12} /> AI ASSISTANT</button>
             </div>
             <div className="flex-1 overflow-y-auto font-mono text-[10px] p-0">
-               {activePanel === 'logs' ? (
+               {/* AI ASSISTANT PANEL */}
+               {activePanel === 'ai' && (
+                   <div className="p-4 flex flex-col h-full">
+                       {proposedCode ? (
+                           <div className="flex-1 flex flex-col gap-3">
+                               <div className="p-3 bg-green-500/10 border border-green-500/20 rounded text-green-600 dark:text-green-400">
+                                   <div className="flex items-center gap-2 font-bold mb-1"><Check size={14}/> Code Generated!</div>
+                                   <div>Previewing changes in the window above.</div>
+                               </div>
+                               <div className="flex gap-2 mt-auto">
+                                   <button onClick={handleAcceptAi} className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold flex items-center justify-center gap-2"><Check size={14}/> ACCEPT</button>
+                                   <button onClick={() => setProposedCode(null)} className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-white/10 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 rounded font-bold flex items-center justify-center gap-2"><X size={14}/> DISCARD</button>
+                               </div>
+                           </div>
+                       ) : (
+                           <div className="flex-1 flex flex-col gap-3">
+                               <div className="text-gray-500 italic mb-2">Ask Gemini to modify your App.jsx...</div>
+                               <textarea 
+                                   className="flex-1 w-full bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded p-3 resize-none outline-none focus:border-pink-500 transition-colors"
+                                   placeholder="e.g. 'Make the background dark blue' or 'Add a title at the top'"
+                                   value={aiPrompt}
+                                   onChange={(e) => setAiPrompt(e.target.value)}
+                               />
+                               <button 
+                                   onClick={handleAiGenerate}
+                                   disabled={isAiGenerating || !aiPrompt.trim()}
+                                   className="py-2 bg-pink-500 hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded font-bold flex items-center justify-center gap-2 transition-all"
+                               >
+                                   {isAiGenerating ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                   {isAiGenerating ? 'GENERATING...' : 'GENERATE'}
+                               </button>
+                           </div>
+                       )}
+                   </div>
+               )}
+               {/* LOGS PANEL */}
+               {activePanel === 'logs' && (
                   <div className="p-4 space-y-2">
                      {aiLog.map((log, i) => (
                         <div key={i} className={`p-2 rounded border-l-2 ${
@@ -567,7 +626,9 @@ export default function Dashboard({ user, token, repo, onBack }) {
                         </div>
                      ))}
                   </div>
-               ) : (
+               )}
+               {/* PROPERTIES PANEL */}
+               {activePanel === 'properties' && (
                   <div className="p-2 space-y-1">
                      {bubbles.length === 0 ? (
                         <div className="text-gray-500 text-center py-8 italic">No active trackers. Drag elements from the preview here.</div>
@@ -592,24 +653,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                 <div className="bg-gray-50 dark:bg-black/40 p-2 text-[9px] text-gray-600 dark:text-gray-400 space-y-1 border-t border-gray-200 dark:border-white/5">
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MousePointerClick size={10}/> Interactions</div> <span className="text-green-600 dark:text-green-400 font-mono">{b.count}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Code size={10}/> Type</div> <span className="text-black dark:text-white font-mono">{b.meta?.type || 'Unknown'}</span></div>
-                                   <div className="flex items-center justify-between">
-                                     <div className="flex items-center gap-1"><Move size={10}/> Dimensions</div>
-                                     <div className="flex items-center gap-2">
-                                       <input
-                                         type="number"
-                                         value={b.meta?.width ? parseInt(b.meta.width) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'width', v); }}
-                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
-                                       />
-                                       <span className="text-gray-500">x</span>
-                                       <input
-                                         type="number"
-                                         value={b.meta?.height ? parseInt(b.meta.height) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'height', v); }}
-                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
-                                       />
-                                     </div>
-                                   </div>
+                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Move size={10}/> Dimensions</div> <span>{b.meta?.width}x{b.meta?.height}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MapPin size={10}/> Position</div> <span>{b.meta?.x}, {b.meta?.y}</span></div>
                                    <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1"><Palette size={10}/> Color</div>
