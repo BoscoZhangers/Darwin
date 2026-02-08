@@ -6,7 +6,7 @@ import {
   signOut as firebaseSignOut, 
   onAuthStateChanged 
 } from "firebase/auth";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, query, limitToLast } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -48,34 +48,40 @@ export const subscribeToAuth = (callback) => {
   });
 };
 
-// --- UPDATED SUBSCRIPTION FUNCTION ---
+// --- SUBSCRIPTION FUNCTION ---
 export const subscribeToSwarm = (repoId, callback, demoMode = false) => {
   if (demoMode || !repoId) return () => {}; 
   
-  // 1. Force lowercase to match your Test Site ID
   const safeRepoId = repoId.replace('/', '_').toLowerCase();
   
-  // 2. Define References
   const sessionsRef = ref(db, `swarm/${safeRepoId}/active_sessions`);
   const clicksRef = ref(db, `swarm/${safeRepoId}/clicks`);
+  const eventsRef = query(ref(db, `swarm/${safeRepoId}/events`), limitToLast(1));
 
-  // 3. Listen for Active Users
+  // 1. LISTEN FOR FULL USER DATA (Required for Analytics & Counts)
   const unsubscribeSessions = onValue(sessionsRef, (snapshot) => {
-    const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
-    callback('users', count);
+    const data = snapshot.val();
+    // We send 'users_full' because Dashboard expects the object to calculate duration
+    callback('users_full', data || {}); 
   });
 
-  // 4. Listen for Clicks (NEW)
+  // 2. LISTEN FOR CLICKS (For Bubble Sizes)
   const unsubscribeClicks = onValue(clicksRef, (snapshot) => {
+    if (snapshot.exists()) callback('clicks', snapshot.val());
+  });
+
+  // 3. LISTEN FOR EVENTS (Real-time pulses)
+  const unsubscribeEvents = onValue(eventsRef, (snapshot) => {
     if (snapshot.exists()) {
-      // Returns object like: { "btn-cta": 12, "hero-text": 5 }
-      callback('clicks', snapshot.val());
+      const data = snapshot.val();
+      const latestKey = Object.keys(data)[0];
+      callback('event', data[latestKey]);
     }
   });
 
-  // Return a cleanup function that stops BOTH listeners
   return () => {
     unsubscribeSessions();
     unsubscribeClicks();
+    unsubscribeEvents();
   };
 };
