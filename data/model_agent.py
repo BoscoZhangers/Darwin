@@ -283,7 +283,7 @@ def click_agent(output_len, html_files,list_of_classes):
     return response.text
 
 
-def nn_model(df, NUM_DIVS = 5, EMBEDDING_DIM = 256, INNER_LAYER_SIZE = 128, TRAIN_EPOCHES = 4000, predict_x = None, predict_y = None, predict_id = None, predict_ref = None):
+def nn_model(df, NUM_DIVS = 5, EMBEDDING_DIM = 256, INNER_LAYER_SIZE = 128, TRAIN_EPOCHES = 4000, predict_x = None, predict_y = None, predict_id = None, predict_other = None, predict_ref = None):
     FEATURES = [col for col in df.columns if col != 'hits']
     NUM_FEATURES = len(FEATURES)
 
@@ -390,8 +390,15 @@ def nn_model(df, NUM_DIVS = 5, EMBEDDING_DIM = 256, INNER_LAYER_SIZE = 128, TRAI
             'description': 3,
             'btn-cta-2': 4
         }
-        x_predict = torch.tensor(np.array([predict_x, predict_y, conversion_table[predict_id]]+ predict_ref.loc[predict_id].tolist()), dtype=torch.float32)
-        print(len(x_predict))
+        new_attributes = []
+        for row in predict_ref.loc[predict_id].items():
+            if row[0] in predict_other.keys():
+                new_attributes.append(predict_other[row[0]])
+            else:
+                new_attributes.append(row[1])
+        
+        x_predict = torch.tensor(np.array([predict_x, predict_y, conversion_table[predict_id]]+ new_attributes), dtype=torch.float32)
+
         model = Predictor() # Predictor class instantiated with global NUM_FEATURES from previous cell
         model.load_state_dict(torch.load('train.pth'))
         print("Model loaded successfully")
