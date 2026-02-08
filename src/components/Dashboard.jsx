@@ -4,7 +4,7 @@ import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronR
 import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
 import { subscribeToSwarm } from '../lib/firebase';
-import {APP_HOST, PORT} from "../constants";
+import {APP_HOST, BACKEND_PORT, PORT} from "../constants";
 import { parse } from 'postcss';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
@@ -133,7 +133,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   useEffect(() => {
     const handleMessage = (e) => {
       if (e.data.type === 'UPDATE_POS') {
-        const { index, x, y } = e.data;
+        const { index, x, y, dataDarwinId } = e.data;
         let matchCount = 0;
         const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
             if (matchCount === index) {
@@ -147,7 +147,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
             return fullMatch; 
         });
         if (newCode !== code) onUpdateCode(newCode);
-        handleUpdateLayout(index, x, y);
+        handleUpdateLayout(dataDarwinId || index, x, y);
       }
       if (e.data.type === 'UPDATE_STYLE') {
         const { index, attr, value, dataDarwinId } = e.data;
@@ -502,6 +502,7 @@ const handleAiGenerate = async () => {
       
       setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
 
+      console.log(aiPrompt)
       const resp = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -582,7 +583,7 @@ const handleAiGenerate = async () => {
           else if (id == 5) id = "description"
           else id = 'btn-cta-2'
         }
-    const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id, predict_other: predict_other}) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.label === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
+    const resp = await fetch(APP_HOST + BACKEND_PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id, predict_other: predict_other}) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.label === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
 
   useEffect(() => {
     if (!extractedGhost) return;
@@ -772,7 +773,24 @@ const handleAiGenerate = async () => {
                                 <div className="bg-gray-50 dark:bg-black/40 p-2 text-[9px] text-gray-600 dark:text-gray-400 space-y-1 border-t border-gray-200 dark:border-white/5">
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MousePointerClick size={10}/> Interactions</div> <span className="text-green-600 dark:text-green-400 font-mono">{b.count}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Code size={10}/> Type</div> <span className="text-black dark:text-white font-mono">{b.meta?.type || 'Unknown'}</span></div>
-                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Move size={10}/> Dimensions</div> <span>{b.meta?.width}x{b.meta?.height}</span></div>
+                                    <div className="flex items-center justify-between">
+                                     <div className="flex items-center gap-1"><Move size={10}/> Dimensions</div>
+                                     <div className="flex items-center gap-2">
+                                       <input
+                                         type="number"
+                                         value={b.meta?.width ? parseInt(b.meta.width) : ''}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'width', v); }}
+                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                       />
+                                       <span className="text-gray-500">x</span>
+                                       <input
+                                         type="number"
+                                         value={b.meta?.height ? parseInt(b.meta.height) : ''}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'height', v); }}
+                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                       />
+                                     </div>
+                                   </div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MapPin size={10}/> Position</div> <span>{b.meta?.x}, {b.meta?.y}</span></div>
                                    <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1"><Palette size={10}/> Color</div>
