@@ -1,0 +1,9 @@
+pandas
+torch
+scikit-learn
+numpy
+seaborn
+google-genai
+fastapi
+uvicorn
+google-generativeai
