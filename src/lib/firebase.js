@@ -21,20 +21,14 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const provider = new GithubAuthProvider();
-
-// Request full repo access so we can read/write files
 provider.addScope('repo'); 
 
-// 1. Sign In
 export const signInWithGithub = async () => {
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GithubAuthProvider.credentialFromResult(result);
     const token = credential.accessToken;
-    
-    // Save token to localStorage so it persists on refresh
     if (token) localStorage.setItem('gh_token', token);
-    
     return { user: result.user, token };
   } catch (error) {
     console.error("Error signing in:", error);
@@ -42,39 +36,46 @@ export const signInWithGithub = async () => {
   }
 };
 
-// 2. Sign Out
 export const signOut = async () => {
   localStorage.removeItem('gh_token');
   return firebaseSignOut(auth);
 };
 
-// 3. Auth Listener (THIS WAS MISSING)
 export const subscribeToAuth = (callback) => {
   return onAuthStateChanged(auth, (user) => {
-    // Retrieve the token we saved earlier
     const token = localStorage.getItem('gh_token');
     callback(user, token);
   });
 };
 
-// src/lib/firebase.js
-
+// --- UPDATED SUBSCRIPTION FUNCTION ---
 export const subscribeToSwarm = (repoId, callback, demoMode = false) => {
   if (demoMode || !repoId) return () => {}; 
   
-  // 👇 FIX: Force lowercase so 'BoscoZhangers' matches 'boscozhangers'
+  // 1. Force lowercase to match your Test Site ID
   const safeRepoId = repoId.replace('/', '_').toLowerCase();
   
+  // 2. Define References
   const sessionsRef = ref(db, `swarm/${safeRepoId}/active_sessions`);
-  
-  console.log(`🔌 Dashboard Listening to: swarm/${safeRepoId}/active_sessions`); // Debug Log
+  const clicksRef = ref(db, `swarm/${safeRepoId}/clicks`);
 
-  return onValue(sessionsRef, (snapshot) => {
+  // 3. Listen for Active Users
+  const unsubscribeSessions = onValue(sessionsRef, (snapshot) => {
+    const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+    callback('users', count);
+  });
+
+  // 4. Listen for Clicks (NEW)
+  const unsubscribeClicks = onValue(clicksRef, (snapshot) => {
     if (snapshot.exists()) {
-      const count = Object.keys(snapshot.val()).length;
-      callback('users', count);
-    } else {
-      callback('users', 0);
+      // Returns object like: { "btn-cta": 12, "hero-text": 5 }
+      callback('clicks', snapshot.val());
     }
   });
+
+  // Return a cleanup function that stops BOTH listeners
+  return () => {
+    unsubscribeSessions();
+    unsubscribeClicks();
+  };
 };
