@@ -38,6 +38,56 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         handleUpdateLayout(index, x, y);
       }
 
+      // HANDLE: STYLE UPDATE (from Properties Panel)
+      if (e.data.type === 'UPDATE_STYLE') {
+        const { index, attr, value } = e.data;
+        let matchCount = 0;
+        const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
+        const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
+          if (matchCount === index) {
+            let newProps = props;
+
+            // 1) attr="value" pattern (e.g., data-* or direct attr)
+            const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
+            if (attrEqRegex.test(newProps)) {
+              newProps = newProps.replace(attrEqRegex, `${mappedAttr}="${value}"`);
+            } else {
+              // 2) style object pattern: prefer updating the `style={{ ... }}` object
+              const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
+              const styleMatch = newProps.match(styleObjRegex);
+              if (styleMatch) {
+                let inner = styleMatch[1];
+                const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
+                if (stylePropRegex.test(inner)) {
+                  inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
+                } else {
+                  // Append new style prop, ensure comma separation
+                  inner = inner.trim();
+                  if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', ';
+                  inner = inner + `${mappedAttr}: '${value}'`;
+                }
+                newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
+              } else {
+                // 3) fallback: try to find inline style-like prop (e.g., color: 'red')
+                const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
+                if (stylePropRegex.test(newProps)) {
+                  newProps = newProps.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
+                } else {
+                  // 4) final fallback: append as an attribute
+                  newProps = newProps + ` ${mappedAttr}="${value}"`;
+                }
+              }
+            }
+
+            matchCount++;
+            return `<${tag}${newProps}>`;
+          }
+          matchCount++;
+          return fullMatch;
+        });
+        if (newCode !== code) onUpdateCode(newCode);
+      }
+
       // HANDLE: Extraction Dragging (Live Mode)
       if (e.data.type === 'EXTRACT_COMPONENT') {
          onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
@@ -45,7 +95,7 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [code, onUpdateCode, onExtractStart]);
+  }, [code, onUpdateCode, onExtractStart, handleUpdateLayout]);
 
   const prepareTransformedCode = () => {
     try {
@@ -246,6 +296,24 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [expandedProperties, setExpandedProperties] = useState(new Set());
 
   const [extractedGhost, setExtractedGhost] = useState(null); 
+
+  // Helper: normalize CSS color values to hex for the color input
+  const colorToHex = (c) => {
+    if (!c) return '#000000';
+    if (typeof c !== 'string') return '#000000';
+    if (c.startsWith('#')) return c;
+    const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join('');
+    return '#000000';
+  };
+
+  const handleStyleChange = (id, prop, value) => {
+    // Update local UI meta
+    setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b));
+    // Post to window so the IframeRenderer's parent-level message handler
+    // picks it up and applies the same regex-based patch to the source code.
+    try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value }, '*'); } catch (e) {}
+  };
 
   const [fileTree, setFileTree] = useState([]);
   const [openTabs, setOpenTabs] = useState([]);
@@ -556,9 +624,20 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Code size={10}/> Type</div> <span className="text-white font-mono">{b.meta?.type || 'Unknown'}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Move size={10}/> Dimensions</div> <span>{b.meta?.width}x{b.meta?.height}</span></div>
                                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><MapPin size={10}/> Position</div> <span>{b.meta?.x}, {b.meta?.y}</span></div>
-                                   <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Palette size={10}/> Color</div> 
-                                       <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full border border-white/20" style={{backgroundColor: b.meta?.bgColor}}></div> <span className="font-mono">{b.meta?.color}</span></div>
+                                   <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1"><Palette size={10}/> Color</div>
+                                      <div className="flex items-center gap-2">
+                                        <input type="color" value={colorToHex(b.meta?.bgColor)} onChange={(e) => handleStyleChange(b.id, 'bgColor', e.target.value)} className="w-8 h-8 p-0 border border-white/10 rounded" />
+                                        <div className="w-3 h-3 rounded-full border border-white/20" style={{backgroundColor: b.meta?.bgColor}}></div>
+                                        <span className="font-mono ml-2">{b.meta?.color}</span>
+                                      </div>
                                    </div>
+                                     <div className="flex items-center justify-between mt-1">
+                                        <div className="flex items-center gap-1"><span className="text-[10px]">Font-size</span></div>
+                                        <div className="flex items-center gap-2">
+                                          <input type="number" value={b.meta?.fontSize ? parseInt(b.meta.fontSize) : ''} onChange={(e) => handleStyleChange(b.id, 'fontSize', `${e.target.value}px`)} className="w-20 p-1 rounded border border-white/10 text-black text-[10px]" />
+                                        </div>
+                                     </div>
                                 </div>
                               )}
                            </div>
