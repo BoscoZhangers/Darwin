@@ -1,11 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  GithubAuthProvider, 
-  signInWithPopup, 
-  signOut as firebaseSignOut, 
-  onAuthStateChanged 
-} from "firebase/auth";
+import { getAuth, GithubAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { getDatabase, ref, onValue } from "firebase/database";
 
 const firebaseConfig = {
@@ -27,55 +21,31 @@ export const signInWithGithub = async () => {
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GithubAuthProvider.credentialFromResult(result);
-    const token = credential.accessToken;
-    if (token) localStorage.setItem('gh_token', token);
-    return { user: result.user, token };
-  } catch (error) {
-    console.error("Error signing in:", error);
-    throw error;
-  }
+    if (credential.accessToken) localStorage.setItem('gh_token', credential.accessToken);
+    return { user: result.user, token: credential.accessToken };
+  } catch (error) { console.error("Error signing in:", error); throw error; }
 };
 
-export const signOut = async () => {
-  localStorage.removeItem('gh_token');
-  return firebaseSignOut(auth);
-};
+export const signOut = async () => { localStorage.removeItem('gh_token'); return firebaseSignOut(auth); };
+export const subscribeToAuth = (callback) => { return onAuthStateChanged(auth, (user) => { const token = localStorage.getItem('gh_token'); callback(user, token); }); };
 
-export const subscribeToAuth = (callback) => {
-  return onAuthStateChanged(auth, (user) => {
-    const token = localStorage.getItem('gh_token');
-    callback(user, token);
-  });
-};
-
-// --- UPDATED SUBSCRIPTION FUNCTION ---
 export const subscribeToSwarm = (repoId, callback, demoMode = false) => {
   if (demoMode || !repoId) return () => {}; 
-  
-  // 1. Force lowercase to match your Test Site ID
   const safeRepoId = repoId.replace('/', '_').toLowerCase();
   
-  // 2. Define References
   const sessionsRef = ref(db, `swarm/${safeRepoId}/active_sessions`);
   const clicksRef = ref(db, `swarm/${safeRepoId}/clicks`);
 
-  // 3. Listen for Active Users
+  // 1. Send Active User Count
   const unsubscribeSessions = onValue(sessionsRef, (snapshot) => {
     const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
     callback('users', count);
   });
 
-  // 4. Listen for Clicks (NEW)
+  // 2. Send Click Data
   const unsubscribeClicks = onValue(clicksRef, (snapshot) => {
-    if (snapshot.exists()) {
-      // Returns object like: { "btn-cta": 12, "hero-text": 5 }
-      callback('clicks', snapshot.val());
-    }
+    if (snapshot.exists()) callback('clicks', snapshot.val());
   });
 
-  // Return a cleanup function that stops BOTH listeners
-  return () => {
-    unsubscribeSessions();
-    unsubscribeClicks();
-  };
+  return () => { unsubscribeSessions(); unsubscribeClicks(); };
 };
