@@ -42,19 +42,27 @@ def eval(model, X_test, y_test):
     mae = mean_absolute_error(y_test.numpy(), test_preds.numpy())
     print("Test MAE:", mae)
 
-def test(x, y, div_id, scaler, model):
+def test(x, y, div_id, scaler, color_scaler, size_scaler, model):
     model.eval()
-    transformed = scaler.transform(np.array([[x, y]]))
-    print(f"[{x}, {y}, {div_id}]", model(torch.tensor([transformed[0, 0], transformed[0, 1], div_id], dtype=torch.float32)))
+    transformed = scaler.transform(np.array([[40,700]]))
+    ct = color_scaler.transform(np.array([[255, 0, 125]]))
+    st = size_scaler.transform(np.array([[40,152,355,100]]))
+    print(f"[{x}, {y}, {div_id}]", model(torch.tensor([transformed[0, 0], transformed[0, 1], 0, st[0, 0], st[0, 1], st[0, 2], st[0, 3], 18,3.8,0,1,10,ct[0,0], ct[0, 1], ct[0, 2],36,42,35,1,0,0,0,0,0,0], dtype=torch.float32)))
 
 
 def main():
-    df = pd.read_csv("../data/test_data.csv")
-    X = df[["x", "y", "div id"]].copy()
-    y = df["clicks"].values
+    df = pd.read_csv("../data/synthetic_data.csv")
+    X = df[[col for col in df.columns if col != 'hits']].copy()
+    y = df["hits"].values
 
     scaler = StandardScaler()
     X[["x", "y"]] = scaler.fit_transform(X[["x", "y"]].to_numpy())
+
+    color_scaler = StandardScaler()
+    X[["backgroundColor_R", "backgroundColor_G", "backgroundColor_B"]] = color_scaler.fit_transform(X[["backgroundColor_R", "backgroundColor_G", "backgroundColor_B"]].to_numpy())
+
+    size_scaler = StandardScaler()
+    X[["left", "top", "width", "height"]] = size_scaler.fit_transform(X[["left", "top", "width", "height"]].to_numpy())
 
     X_train, X_test, y_train, y_test = train_test_split(X.values, y, test_size=0.2, random_state=42)
     X_train = torch.tensor(X_train, dtype=torch.float32)
@@ -65,7 +73,7 @@ def main():
 
     # print(X_train, X_test, y_train, y_test)
 
-    model = Predictor()
+    model = Predictor(len([col for col in df.columns if col != 'hits']))
 
     if os.path.exists('train.pth'):
         model.load_state_dict(torch.load('train.pth'))
@@ -82,15 +90,15 @@ def main():
     # # print("[3, 100, 1]", model(torch.tensor([3, 100, 1], dtype=torch.float32)))
     # print("[3, 200, 0]", model(torch.tensor([b[0, 0], b[0, 1], 0], dtype=torch.float32)))
 
-    test(5, 100, 0, scaler, model)
-    test(3, 200, 0, scaler, model)
-    test(3, 100, 1, scaler, model)
-    test(5, 50, 0, scaler, model)
-    test(5, 75, 0, scaler, model)
-    test(5, 95, 0, scaler, model)
-    test(30, 280, 2, scaler, model) #60
-    test(30, 20, 2, scaler, model)
-    test(30, 500, 2, scaler, model)
+    test(5, 100, 0, scaler, color_scaler, size_scaler, model)
+    # test(3, 200, 0, scaler, model)
+    # test(3, 100, 1, scaler, model)
+    # test(5, 50, 0, scaler, model)
+    # test(5, 75, 0, scaler, model)
+    # test(5, 95, 0, scaler, model)
+    # test(30, 280, 2, scaler, model) #60
+    # test(30, 20, 2, scaler, model)
+    # test(30, 500, 2, scaler, model)
 
 
 

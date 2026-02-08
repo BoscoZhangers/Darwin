@@ -5,6 +5,7 @@ import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
 import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, PORT} from "../constants";
+import { parse } from 'postcss';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 
@@ -25,6 +26,109 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   useEffect(() => {
     sendSelection();
   }, [sendSelection]);
+
+  function parseStyleInner(inner) {
+    let x = null;
+    let y = null;
+
+    let backgroundColor = { r: null, g: null, b: null };
+    let color = { r: null, g: null, b: null };
+
+    // ---------- Extract left ----------
+    const leftMatch = inner.match(/left\s*:\s*['"]?(\d+)?['"]?/);
+    if (leftMatch) {
+        x = parseInt(leftMatch[1], 10);
+        inner = inner.replace(leftMatch[0], "");
+    }
+
+    // ---------- Extract top ----------
+    const topMatch = inner.match(/top\s*:\s*['"]?(\d+)?['"]?/);
+    if (topMatch) {
+        y = parseInt(topMatch[1], 10);
+        inner = inner.replace(topMatch[0], "");
+    }
+
+    // ---------- Color parsing helper ----------
+    function parseColor(str) {
+        if (!str) return { r: null, g: null, b: null };
+
+        str = str.trim();
+
+        if (str.startsWith("#")) {
+            const hex = str.replace("#", "");
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+
+        if (str.startsWith("rgb")) {
+            const rgb = str.match(/\d+/g);
+            if (rgb) {
+                return {
+                    r: parseInt(rgb[0]),
+                    g: parseInt(rgb[1]),
+                    b: parseInt(rgb[2])
+                };
+            }
+        }
+
+        return { r: null, g: null, b: null };
+    }
+
+      // ---------- Extract backgroundColor ----------
+      const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
+      if (bgMatch) {
+          backgroundColor = parseColor(bgMatch[1]);
+          inner = inner.replace(bgMatch[0], "");
+      }
+
+      // ---------- Extract color ----------
+      const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
+      if (colorMatch) {
+          color = parseColor(colorMatch[1]);
+          inner = inner.replace(colorMatch[0], "");
+      }
+
+      // ---------- Clean commas ----------
+      inner = inner.replace(/,,+/g, ",");
+      inner = inner.replace(/^,|,$/g, "").trim();
+
+      // ---------- Convert remaining style to object ----------
+      const styleObject = {};
+
+      if (inner.length > 0) {
+          const pairs = inner.split(",");
+          pairs.forEach(pair => {
+              const [key, value] = pair.split(":");
+              try { 
+              if (key && value) {
+                  styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10);
+              }
+             } catch (e) {
+                console.error(e);
+              }
+          });
+      }
+
+      // ---------- Insert RGB objects ----------
+      styleObject.backgroundColor_R = backgroundColor.r ? backgroundColor.r : -1;
+      styleObject.backgroundColor_G = backgroundColor.g ? backgroundColor.g : -1;
+      styleObject.backgroundColor_B = backgroundColor.b ? backgroundColor.b : -1;
+      styleObject.color_R = color.r ? color.r : -1;
+      styleObject.color_G = color.g ? color.g : -1;
+      styleObject.color_B = color.b ? color.b : -1;
+
+      // console.log("PArse x", x)
+
+      return {
+          x,
+          y,
+          style: styleObject
+      };
+  }
+
 
   useEffect(() => {
     const handleMessage = (e) => {
@@ -62,7 +166,8 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         handleUpdateLayout(dataDarwinId || index, x, y);
       }
       if (e.data.type === 'UPDATE_STYLE') {
-        const { index, dataDarwinId, attr, value } = e.data;
+        const { index, attr, value, dataDarwinId } = e.data;
+        // console.log(dataDarwinId);
         let matchCount = 0;
         const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
         const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
@@ -91,6 +196,9 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                 else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
                 inner = inner.replace(/''/g, "");
                 newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
+                var {x, y, style} = parseStyleInner(inner);
+                // console.log(x)
+                handleUpdateLayout(index, x, y, style);
               } else {
                 const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
                 if (stylePropRegex.test(newProps)) newProps = newProps.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
@@ -325,7 +433,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [darkMode]);
 
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
-  const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value }, '*'); } catch (e) {} };
+  const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value}, '*'); } catch (e) {} };
 
   const handleDeleteBubble = (id) => { if (activeId === id) setActiveId(null); setBubbles(prev => prev.filter(b => b.id !== id)); };
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
@@ -361,11 +469,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
   // --- GIT SYNC & FILE LOADING ---
   useEffect(() => { 
-    async function run_pipeline(contents) { 
-      const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: contents }) }); 
-      if (!resp.ok) return; 
-      await resp.json(); 
-    } 
+    // async function run_pipeline(contents) { 
+    //   const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: contents }) }); 
+    //   if (!resp.ok) return; 
+    //   await resp.json(); 
+    // } 
     async function initSync() { 
       if (!token || !repo) return; 
       const octokit = new Octokit({ auth: token }); 
@@ -381,7 +489,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         const appFile = treeData.tree.find(f => f.path === 'src/App.jsx'); 
         if (appFile) { 
           const contents = await handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' }); 
-          run_pipeline(contents); 
+          // run_pipeline(contents); 
         } 
       } catch (err) { console.error(err); } 
     } 
@@ -446,7 +554,18 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
   
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
-  const handleUpdateLayout = (id, newX, newY) => { const fetchBackendCount = async () => { try { const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id }) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.id === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
+  const handleUpdateLayout = (id, newX, newY, predict_other={}) => { 
+    const fetchBackendCount = async () => { 
+      try { 
+        console.log(id)
+        if (typeof id == "number") {
+          if (id == 1) id = "nav-main"
+          else if (id == 3) id = "hero-text"
+          else if (id == 4) id = "btn-cta"
+          else if (id == 5) id = "description"
+          else id = 'btn-cta-2'
+        }
+    const resp = await fetch(APP_HOST + PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id, predict_other: predict_other}) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.label === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
 
   useEffect(() => {
     if (!extractedGhost) return;
