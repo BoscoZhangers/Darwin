@@ -3,7 +3,7 @@ import {
   getAuth, 
   GithubAuthProvider, 
   signInWithPopup, 
-  signOut as firebaseSignOut, // Rename native function to avoid conflict
+  signOut as firebaseSignOut, 
   onAuthStateChanged 
 } from "firebase/auth";
 import { getDatabase, ref, onValue } from "firebase/database";
@@ -42,13 +42,13 @@ export const signInWithGithub = async () => {
   }
 };
 
-// 2. Sign Out (THIS WAS MISSING)
+// 2. Sign Out
 export const signOut = async () => {
   localStorage.removeItem('gh_token');
   return firebaseSignOut(auth);
 };
 
-// 3. Auth Listener
+// 3. Auth Listener (THIS WAS MISSING)
 export const subscribeToAuth = (callback) => {
   return onAuthStateChanged(auth, (user) => {
     // Retrieve the token we saved earlier
@@ -57,13 +57,24 @@ export const subscribeToAuth = (callback) => {
   });
 };
 
-// 4. Swarm/Database Subscription
-export const subscribeToSwarm = (callback, demoMode = false) => {
-  if (demoMode) return; 
+// src/lib/firebase.js
+
+export const subscribeToSwarm = (repoId, callback, demoMode = false) => {
+  if (demoMode || !repoId) return () => {}; 
   
-  const swarmRef = ref(db, 'swarm/users');
-  return onValue(swarmRef, (snapshot) => {
-    const data = snapshot.val();
-    callback('users', data || 0);
+  // 👇 FIX: Force lowercase so 'BoscoZhangers' matches 'boscozhangers'
+  const safeRepoId = repoId.replace('/', '_').toLowerCase();
+  
+  const sessionsRef = ref(db, `swarm/${safeRepoId}/active_sessions`);
+  
+  console.log(`🔌 Dashboard Listening to: swarm/${safeRepoId}/active_sessions`); // Debug Log
+
+  return onValue(sessionsRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const count = Object.keys(snapshot.val()).length;
+      callback('users', count);
+    } else {
+      callback('users', 0);
+    }
   });
 };

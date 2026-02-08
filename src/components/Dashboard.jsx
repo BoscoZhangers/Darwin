@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X } from 'lucide-react';
 import Scene from './Scene';
-import { getDatabase, ref, onValue } from "firebase/database";
+import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, PORT} from "../constants";
 
 // --- VIBRANT PALETTE ---
@@ -10,7 +10,7 @@ const NEON_PALETTE = [
   "#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"
 ];
 
-// --- 1. RUNTIME RENDERER (UNTOUCHED) ---
+// --- 1. RUNTIME RENDERER ---
 const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart }) => {
   const iframeRef = useRef(null);
 
@@ -321,31 +321,21 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [fileContents, setFileContents] = useState({});
   const [loadingFile, setLoadingFile] = useState(false);
 
-  // --- SAFE HANDLERS (With Delay to Prevent 3D Crash) ---
+  // --- SAFE HANDLERS ---
   const handleDeleteBubble = (id) => {
-    // 1. If we are deleting the CURRENTLY selected bubble, Deselect it first
     if (activeId === id) {
         setActiveId(null);
-        // Wait for next frame to delete
-        setTimeout(() => {
-            setBubbles(prev => prev.filter(b => b.id !== id));
-        }, 100);
+        setTimeout(() => { setBubbles(prev => prev.filter(b => b.id !== id)); }, 100);
     } else {
-        // Safe to delete immediately
         setBubbles(prev => prev.filter(b => b.id !== id));
     }
   };
   
   const toggleVisibility = (id) => {
-    // 1. If we are hiding the CURRENTLY selected bubble, Deselect it first
     if (activeId === id) {
         setActiveId(null);
-        // Wait for next frame to hide
-        setTimeout(() => {
-            setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
-        }, 100);
+        setTimeout(() => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); }, 100);
     } else {
-        // Safe to toggle immediately
         setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
     }
   };
@@ -355,6 +345,26 @@ export default function Dashboard({ user, token, repo, onBack }) {
     if(next.has(id)) next.delete(id); else next.add(id);
     setExpandedProperties(next);
   };
+
+  // --- LIVE USER TRACKING SUBSCRIPTION ---
+  useEffect(() => {
+    // If we are in Demo mode or no repo is selected, ignore
+    if (demoMode || !repo) return;
+
+    // Use the repo's full name as the ID (e.g. "boscozhangers/test2")
+    const repoId = repo.full_name;
+
+    // Subscribe to Firebase using the repo ID
+    const unsubscribe = subscribeToSwarm(repoId, (type, count) => {
+      if (type === 'users') {
+        setTotalUsers(count);
+      }
+    }, demoMode);
+
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [demoMode, repo]);
 
   // --- REPO LOADING LOGIC ---
   useEffect(() => {
