@@ -4,7 +4,6 @@ import { OrbitControls, Sphere, MeshDistortMaterial, Grid, Environment, Transfor
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import Crowd from './Crowd';
 
-// --- FEATURE BUBBLE ---
 const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, ref) => {
   useFrame((state) => {
     if (ref.current) {
@@ -13,95 +12,47 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick }, r
         if (ref.current.position.y < 1) ref.current.position.y = 1;
     }
   });
-
   return (
     <group ref={ref} onClick={onClick}>
-      {/* The Sphere */}
       <Sphere args={[1, 32, 32]}>
-        <MeshDistortMaterial 
-          color={color} 
-          speed={2} 
-          distort={0.4} 
-          roughness={0.2} 
-          emissive={color} 
-          emissiveIntensity={isSelected ? 3 : 1.2} 
-          toneMapped={false} 
-          transparent
-          opacity={0.8}
-        />
+        <MeshDistortMaterial color={color} speed={2} distort={0.4} roughness={0.2} emissive={color} emissiveIntensity={isSelected ? 3 : 1.2} toneMapped={false} transparent opacity={0.8} />
       </Sphere>
-      
-      {/* The Label - Now Scaled for 3D */}
-      <Html 
-        position={[0, 0, 0]} 
-        center 
-        distanceFactor={7} // Controls the perspective scale (Lower = Larger text relative to distance)
-        style={{ pointerEvents: 'none' }}
-      >
+      <Html position={[0, 0, 0]} center distanceFactor={7} style={{ pointerEvents: 'none' }}>
         <div className="flex flex-col items-center justify-center text-center w-40">
-            {/* Main Label */}
-            <div className={`
-              text-lg font-black font-mono tracking-widest uppercase leading-none
-              ${isSelected ? 'text-white' : 'text-white/90'}
-            `}
-            style={{ 
-              textShadow: '0 0 5px rgba(0,0,0,0.8), 0 0 10px black' // Stronger shadow for readability
-            }}
-            >
-              {label}
-            </div>
-
-            {/* Sub-label (Simulated Metric) */}
-            <div className="text-[10px] font-mono text-white/80 mt-1 font-bold" style={{ textShadow: '0 0 4px black' }}>
-               {Math.floor(Math.random() * 80 + 20)}% TRAFFIC
-            </div>
+            <div className={`text-lg font-black font-mono tracking-widest uppercase leading-none ${isSelected ? 'text-white' : 'text-white/90'}`} style={{ textShadow: '0 0 5px rgba(0,0,0,0.8), 0 0 10px black' }}>{label}</div>
+            <div className="text-[10px] font-mono text-white/80 mt-1 font-bold" style={{ textShadow: '0 0 4px black' }}>{Math.floor(Math.random() * 80 + 20)}% TRAFFIC</div>
         </div>
       </Html>
-
-      {/* Selection Ring */}
-      {isSelected && (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[1.2, 1.3, 32]} />
-          <meshBasicMaterial color="white" opacity={0.5} transparent />
-        </mesh>
-      )}
+      {isSelected && <mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[1.2, 1.3, 32]} /><meshBasicMaterial color="white" opacity={0.5} transparent /></mesh>}
     </group>
   );
 });
 
-// --- CLUSTER ---
 const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect }) => {
   const bubbleRef = useRef();
-  // console.log("Crowd count update", crowdCount)
   return (
     <group>
-      {isSelected && <TransformControls object={bubbleRef} mode="translate" />}
-      <group position={position}>
-        <FeatureBubble 
-          ref={bubbleRef} 
-          label={label} 
-          color={color} 
-          isSelected={isSelected} 
-          onClick={(e) => { e.stopPropagation(); onSelect(id); }} 
+      {isSelected && (
+        <TransformControls 
+          object={bubbleRef} 
+          mode="translate"
+          // --- FIX FOR ARROW GLITCH ---
+          size={1.4}          // Larger than sphere to stick out clearly
+          depthTest={false}   // Renders ON TOP of sphere (X-Ray), preventing "inward" illusion
+          renderOrder={999}   // Ensures it's drawn last
+          lineWidth={2}
         />
+      )}
+      <group position={position}>
+        <FeatureBubble ref={bubbleRef} label={label} color={color} isSelected={isSelected} onClick={(e) => { e.stopPropagation(); onSelect(id); }} />
       </group>
       <Crowd count={crowdCount} targetRef={bubbleRef} color={color} wander={false} />
     </group>
   );
 };
 
-// --- MAIN SCENE ---
-export default function Scene({ bubbles }) {
-  
-  // --- FIX: CALCULATE DYNAMIC CROWD SIZE ---
-  // 1. Count how many bubbles are actually visible
-  const visibleBubbles = bubbles.filter(b => b.visible);
-  const unassignedUsers = 50;
-
-  const [activeId, setActiveId] = useState();
-  
-  // 2. Divide total users among them (e.g., 100 users / 2 bubbles = 50 each)
-  // const baseCount = visibleBubbles.length > 0 ? Math.floor(totalUsers / visibleBubbles.length) : 0;
+export default function Scene({ bubbles, userCount, activeId, setActiveId }) {
+  const crowdSize = userCount !== undefined ? userCount : 50;
 
   return (
     <div className="w-full h-full bg-tech-black cursor-crosshair">
@@ -117,24 +68,12 @@ export default function Scene({ bubbles }) {
           <Vignette eskil={false} offset={0.1} darkness={1.1} />
         </EffectComposer>
 
-        {/* GREY CROWD */}
-        <Crowd count={unassignedUsers} color="grey" wander={true} />
+        <Crowd count={crowdSize} color="grey" wander={true} />
 
-        {/* BUBBLES */}
         {bubbles.map((b) => {
           if (!b.visible) return null;
-          return (
-            <BubbleCluster 
-              key={b.id}
-              {...b} 
-              // PASS CALCULATED COUNT INSTEAD OF STATIC COUNT
-              crowdCount={b.count} 
-              isSelected={activeId === b.id}
-              onSelect={setActiveId}
-            />
-          );
+          return <BubbleCluster key={b.id} {...b} crowdCount={b.count} isSelected={activeId === b.id} onSelect={setActiveId} />;
         })}
-
       </Canvas>
     </div>
   );
