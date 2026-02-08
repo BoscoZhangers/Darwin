@@ -351,13 +351,31 @@ export default function Dashboard({ user, token, repo, onBack }) {
     // If we are in Demo mode or no repo is selected, ignore
     if (demoMode || !repo) return;
 
-    // Use the repo's full name as the ID (e.g. "boscozhangers/test2")
     const repoId = repo.full_name;
 
     // Subscribe to Firebase using the repo ID
-    const unsubscribe = subscribeToSwarm(repoId, (type, count) => {
+    const unsubscribe = subscribeToSwarm(repoId, (type, data) => {
+      
+      // Case A: Update Total User Count
       if (type === 'users') {
-        setTotalUsers(count);
+        setTotalUsers(data);
+      }
+      
+      // Case B: Update Interaction Counts (NEW)
+      if (type === 'clicks') {
+        // data example: { "btn-cta": 4, "nav-main": 12 }
+        setBubbles(prevBubbles => 
+          prevBubbles.map(bubble => {
+            // "bubble.label" matches the "data-darwin-id" (e.g., 'btn-cta')
+            const newCount = data[bubble.label];
+            
+            // If Firebase has a count for this bubble, update it
+            if (newCount !== undefined && newCount !== bubble.count) {
+               return { ...bubble, count: newCount };
+            }
+            return bubble;
+          })
+        );
       }
     }, demoMode);
 
@@ -561,7 +579,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
             </div>
          )}
 
-         <div className="h-[75%]">
+         <div className="h-1/2">
            <div className="flex flex-col h-full bg-[#1e1e1e]">
               <div className="h-10 flex items-center justify-between px-4 bg-[#252526] border-b border-black/20">
                  <span className="text-[10px] font-bold uppercase text-gray-400 flex items-center gap-2"><Globe size={12}/> Live Preview</span>
@@ -580,7 +598,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
               </div>
            </div>
          </div>
-         <div className="h-[25%] border-t border-white/10 flex flex-col bg-black/40">
+
+         <div className="h-1/2 border-t border-white/10 flex flex-col bg-black/40">
             {/* TABS HEADER */}
             <div className="flex border-b border-white/10">
                <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-white/10 text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
