@@ -38,3 +38,12 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Large Model Backups (Keep only the active one!)
+data/*.pth
+deploy_files/
