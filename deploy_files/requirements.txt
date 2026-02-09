@@ -6,4 +6,4 @@ seaborn
 google-genai
 fastapi
 uvicorn
-pydantic
+google-generativeai
