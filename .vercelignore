@@ -1,0 +1,12 @@
+# Ignore heavy data folders
+data/
+deploy_files/
+
+# Ignore backup models in the train folder
+train/prev_train.pth
+
+# Ignore system files
+.git
+.DS_Store
+venv/
+__pycache__/
