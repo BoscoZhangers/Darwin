@@ -1,6 +1,0 @@
-x,y,div_category,border-width,color_R,color_G,color_B,border-color_R,border-color_G,border-color_B,background-color_R,background-color_G,background-color_B,border-style_dashed,border-style_double,border-style_solid,cursor_pointer,hits
-0,0,0,2.0,44.0,62.0,80.0,44.0,62.0,80.0,-1.0,-1.0,-1.0,0.0,0.0,1.0,0.0,200
-0,80,1,4.0,230.0,126.0,34.0,230.0,126.0,34.0,-1.0,-1.0,-1.0,1.0,0.0,0.0,0.0,120
-0,160,2,6.0,255.0,255.0,255.0,26.0,82.0,118.0,41.0,128.0,185.0,0.0,0.0,1.0,1.0,120
-0,220,3,8.0,39.0,174.0,96.0,39.0,174.0,96.0,-1.0,-1.0,-1.0,0.0,1.0,0.0,1.0,30
-0,300,3,8.0,39.0,174.0,96.0,39.0,174.0,96.0,-1.0,-1.0,-1.0,0.0,1.0,0.0,1.0,30
