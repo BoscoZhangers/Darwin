@@ -6,3 +6,4 @@ torch
 numpy
 scikit-learn
 pandas  
+Pillow
