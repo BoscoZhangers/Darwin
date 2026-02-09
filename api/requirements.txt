@@ -1,0 +1,10 @@
+pandas
+# Force CPU version of PyTorch (crucial for Vercel/Render)
+torch==2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
+scikit-learn
+numpy
+seaborn
+google-genai
+fastapi
+uvicorn
+pydantic
