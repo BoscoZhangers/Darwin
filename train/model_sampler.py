@@ -194,7 +194,7 @@ class Sampler():
                 df = df.drop(columns=[col])
             # detect non-numeric columns as categories
             else:
-                df[col] = pd.to_numeric(df[col], errors='ignore')
+                df[col] = pd.to_numeric(df[col], errors='coerce')
                 if not is_numeric_dtype(df[col]):
                     categorical_cols.append(col)
 
