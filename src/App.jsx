@@ -3,6 +3,7 @@ import { Github, LogOut, Command, Heart, Sparkles } from 'lucide-react';
 import { subscribeToAuth, signInWithGithub, signOut } from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import RepoSelector from './components/RepoSelector';
+import { Analytics } from "@vercel/analytics/next"
 
 export default function App() {
   const [user, setUser] = useState(null);

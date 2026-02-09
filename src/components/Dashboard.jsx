@@ -571,7 +571,7 @@ const handleAiGenerate = async () => {
              const normalizedX = ((e.clientX / sceneWidth) - 0.5) * 20; 
              const normalizedZ = ((e.clientY / window.innerHeight) - 0.5) * 20; 
              setBubbles(prev => [...prev, { id: extractedGhost.id, label: extractedGhost.tag, count: clicksData[extractedGhost.tag] || 0, visible: true, color: nextColor, position: [normalizedX, 0, normalizedZ], meta: extractedGhost.meta || {} }]);
-             setAiLog(prev => [...prev, { role: 'success', text: `Added tracking for ${extractedGhost.tag}` }]);
+             setAiLog(prev => [...prev, { role: 'success', text: `Now tracking for ${extractedGhost.tag}` }]);
              setActivePanel('properties'); 
           }
        }
