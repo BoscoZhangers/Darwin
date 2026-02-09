@@ -163,10 +163,24 @@ export default function App() {
             </div>
           </div>
         </div>
+        <Analytics />
       </div>
     );
   }
 
-  if (!selectedRepo) return <RepoSelector user={user} token={token} onSelect={setSelectedRepo} onLogout={handleLogout} />;
-  return <Dashboard user={user} token={token} repo={selectedRepo} onBack={() => setSelectedRepo(null)} />;
+  if (!selectedRepo) {
+    return (
+      <>
+        <RepoSelector user={user} token={token} onSelect={setSelectedRepo} onLogout={handleLogout} />
+        <Analytics />
+      </>
+    );
+  }
+  
+  return (
+    <>
+      <Dashboard user={user} token={token} repo={selectedRepo} onBack={() => setSelectedRepo(null)} />
+      <Analytics />
+    </>
+  );
 }
