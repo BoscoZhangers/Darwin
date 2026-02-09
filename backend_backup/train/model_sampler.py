@@ -9,6 +9,17 @@ from PIL import ImageColor
 from pandas.api.types import is_numeric_dtype
 import re
 
+# --- PATH CONFIGURATION (THE FIX) ---
+# Get the directory where THIS file (model_sampler.py) is located
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Get the parent directory (backend_backup)
+BACKEND_ROOT = os.path.dirname(CURRENT_DIR)
+
+# Construct absolute paths
+CSV_PATH = os.path.join(BACKEND_ROOT, 'data', 'synthetic_data.csv')
+MODEL_PATH = os.path.join(CURRENT_DIR, 'train.pth')
+# -------------------------------------
+
 webpage= """
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: 'white' }}>
 
@@ -68,7 +79,14 @@ class Sampler():
         self.color_scaler = StandardScaler()
         self.size_scaler = StandardScaler()
 
-        df = pd.read_csv("./data/synthetic_data.csv")
+        print(f"DEBUG: Loading CSV from {CSV_PATH}")
+        
+        # FIX: Use Absolute Path
+        if os.path.exists(CSV_PATH):
+            df = pd.read_csv(CSV_PATH)
+        else:
+            raise FileNotFoundError(f"CRITICAL ERROR: Could not find synthetic_data.csv at {CSV_PATH}")
+
         X = df[[col for col in df.columns if col != 'hits']].copy()
 
         self.scaler.fit_transform(X[["x", "y"]].to_numpy())
@@ -77,11 +95,15 @@ class Sampler():
 
         self.model = Predictor(len([col for col in df.columns if col != 'hits']))
 
-        if os.path.exists('./train/train.pth'):
-            self.model.load_state_dict(torch.load('./train/train.pth'))
+        print(f"DEBUG: Loading Model from {MODEL_PATH}")
+
+        # FIX: Use Absolute Path & CPU Mapping
+        if os.path.exists(MODEL_PATH):
+            # map_location='cpu' is crucial for Render (no GPU)
+            self.model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
             print("Model loaded successfully")
         else:
-            print("Model not exist")
+            print(f"WARNING: Model not found at {MODEL_PATH}")
 
     
     def vectorize_css(self, webpage):
@@ -170,19 +192,19 @@ class Sampler():
             if not converted_col.isna().all():
                 # It's actually numeric! Update the column.
                 df[col] = converted_col
-                print(f"{col} is Numeric.")
+                # print(f"{col} is Numeric.")
             elif is_measurement(df[col].dropna().tolist()):
                 df[col] = fill_measurement(df[col].tolist())
-                print(f"{col} is a measurement")
+                # print(f"{col} is a measurement")
             elif 'color' in col or 'Color' in col:
                 # It's a complex object (like your RGB color tuples)
                 df[col] = df[col].apply(lambda x: fill_rgb(x))
-                print(f"{col} is a Color/Complex object (Needs expansion).")
+                # print(f"{col} is a Color/Complex object (Needs expansion).")
             else:
-                print(df[col].tolist())
+                # print(df[col].tolist())
                 # It's a true categorical string (like "solid" or "relative")
                 df[col] = df[col].astype('category')
-                print(f"{col} is Categorical.")
+                # print(f"{col} is Categorical.")
 
 
         categorical_cols = []
@@ -230,7 +252,7 @@ class Sampler():
         final_list.extend(new_attributes[15:])
 
         count = self.model(torch.tensor(np.nan_to_num(final_list, nan=-1.0), dtype=torch.float32))
-        print(f"[{x}, {y}, {div_id}]", count)
+        # print(f"[{x}, {y}, {div_id}]", count)
 
         return max(0, count.item())
 
@@ -238,4 +260,3 @@ class Sampler():
 if __name__ == '__main__':
     s = Sampler()
     print(s.sample(40, 140, 'hero-text', {"width": 180, "height": 180}))
-    
