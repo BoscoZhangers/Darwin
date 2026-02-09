@@ -9,7 +9,7 @@ import { parse } from 'postcss';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 
-// --- 1. RUNTIME RENDERER (Unchanged) ---
+// --- 1. RUNTIME RENDERER (Fixed) ---
 const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
 
@@ -30,116 +30,69 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   function parseStyleInner(inner) {
     let x = null;
     let y = null;
-
     let backgroundColor = { r: null, g: null, b: null };
     let color = { r: null, g: null, b: null };
 
-    // ---------- Extract left ----------
     const leftMatch = inner.match(/left\s*:\s*['"]?(\d+)?['"]?/);
-    if (leftMatch) {
-        x = parseInt(leftMatch[1], 10);
-        inner = inner.replace(leftMatch[0], "");
-    }
+    if (leftMatch) { x = parseInt(leftMatch[1], 10); inner = inner.replace(leftMatch[0], ""); }
 
-    // ---------- Extract top ----------
     const topMatch = inner.match(/top\s*:\s*['"]?(\d+)?['"]?/);
-    if (topMatch) {
-        y = parseInt(topMatch[1], 10);
-        inner = inner.replace(topMatch[0], "");
-    }
+    if (topMatch) { y = parseInt(topMatch[1], 10); inner = inner.replace(topMatch[0], ""); }
 
-    // ---------- Color parsing helper ----------
     function parseColor(str) {
         if (!str) return { r: null, g: null, b: null };
-
         str = str.trim();
-
         if (str.startsWith("#")) {
             const hex = str.replace("#", "");
-            return {
-                r: parseInt(hex.substring(0, 2), 16),
-                g: parseInt(hex.substring(2, 4), 16),
-                b: parseInt(hex.substring(4, 6), 16)
-            };
+            return { r: parseInt(hex.substring(0, 2), 16), g: parseInt(hex.substring(2, 4), 16), b: parseInt(hex.substring(4, 6), 16) };
         }
-
-        if (str.startsWith("rgb")) {
-            const rgb = str.match(/\d+/g);
-            if (rgb) {
-                return {
-                    r: parseInt(rgb[0]),
-                    g: parseInt(rgb[1]),
-                    b: parseInt(rgb[2])
-                };
-            }
-        }
-
         return { r: null, g: null, b: null };
     }
 
-      // ---------- Extract backgroundColor ----------
-      const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
-      if (bgMatch) {
-          backgroundColor = parseColor(bgMatch[1]);
-          inner = inner.replace(bgMatch[0], "");
-      }
+    const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
+    if (bgMatch) { backgroundColor = parseColor(bgMatch[1]); inner = inner.replace(bgMatch[0], ""); }
 
-      // ---------- Extract color ----------
-      const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
-      if (colorMatch) {
-          color = parseColor(colorMatch[1]);
-          inner = inner.replace(colorMatch[0], "");
-      }
+    const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
+    if (colorMatch) { color = parseColor(colorMatch[1]); inner = inner.replace(colorMatch[0], ""); }
 
-      // ---------- Clean commas ----------
-      inner = inner.replace(/,,+/g, ",");
-      inner = inner.replace(/^,|,$/g, "").trim();
+    inner = inner.replace(/,,+/g, ",").replace(/^,|,$/g, "").trim();
+    const styleObject = {};
+    if (inner.length > 0) {
+        const pairs = inner.split(",");
+        pairs.forEach(pair => {
+            const [key, value] = pair.split(":");
+            try { if (key && value) styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10); } catch (e) {}
+        });
+    }
+    styleObject.backgroundColor_R = backgroundColor.r ?? -1;
+    styleObject.backgroundColor_G = backgroundColor.g ?? -1;
+    styleObject.backgroundColor_B = backgroundColor.b ?? -1;
+    styleObject.color_R = color.r ?? -1;
+    styleObject.color_G = color.g ?? -1;
+    styleObject.color_B = color.b ?? -1;
 
-      // ---------- Convert remaining style to object ----------
-      const styleObject = {};
-
-      if (inner.length > 0) {
-          const pairs = inner.split(",");
-          pairs.forEach(pair => {
-              const [key, value] = pair.split(":");
-              try { 
-              if (key && value) {
-                  styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10);
-              }
-             } catch (e) {
-                console.error(e);
-              }
-          });
-      }
-
-      // ---------- Insert RGB objects ----------
-      styleObject.backgroundColor_R = backgroundColor.r ? backgroundColor.r : -1;
-      styleObject.backgroundColor_G = backgroundColor.g ? backgroundColor.g : -1;
-      styleObject.backgroundColor_B = backgroundColor.b ? backgroundColor.b : -1;
-      styleObject.color_R = color.r ? color.r : -1;
-      styleObject.color_G = color.g ? color.g : -1;
-      styleObject.color_B = color.b ? color.b : -1;
-
-      // console.log("PArse x", x)
-
-      return {
-          x,
-          y,
-          style: styleObject
-      };
+    return { x, y, style: styleObject };
   }
 
+  // --- UPDATED REGEX LIST TO INCLUDE SEMANTIC TAGS ---
+  const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
 
   useEffect(() => {
     const handleMessage = (e) => {
       if (e.data.type === 'UPDATE_POS') {
         const { index, x, y, dataDarwinId } = e.data;
         let matchCount = 0;
-        const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
+        const newCode = code.replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (fullMatch, tag, props) => {
             if (matchCount === index) {
                let newProps = props;
                if (newProps.match(/left:\s*\d+/)) newProps = newProps.replace(/left:\s*(\d+)/, `left: ${Math.round(x)}`);
+               else if (newProps.includes('style={{')) newProps = newProps.replace(/style=\{\{/, `style={{ left: ${Math.round(x)}, `);
+               else newProps = newProps + ` style={{ left: ${Math.round(x)} }}`;
+
                if (newProps.match(/top:\s*\d+/)) newProps = newProps.replace(/top:\s*(\d+)/, `top: ${Math.round(y)}`);
+               else if (newProps.includes('style={{')) newProps = newProps.replace(/style=\{\{/, `style={{ top: ${Math.round(y)}, `);
+               else if (!newProps.includes('style=')) newProps = newProps + ` style={{ top: ${Math.round(y)} }}`;
+               
                matchCount++;
                return `<${tag}${newProps}>`;
             }
@@ -150,11 +103,10 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
         handleUpdateLayout(dataDarwinId || index, x, y);
       }
       if (e.data.type === 'UPDATE_STYLE') {
-        const { index, attr, value, dataDarwinId } = e.data;
-        // console.log(dataDarwinId);
+        const { index, attr, value } = e.data;
         let matchCount = 0;
         const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
-        const newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
+        const newCode = code.replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (fullMatch, tag, props) => {
           if (matchCount === index) {
             let newProps = props;
             const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
@@ -170,12 +122,9 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
                 else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
                 newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
                 var {x, y, style} = parseStyleInner(inner);
-                // console.log(x)
                 handleUpdateLayout(index, x, y, style);
               } else {
-                const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
-                if (stylePropRegex.test(newProps)) newProps = newProps.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
-                else newProps = newProps + ` ${mappedAttr}="${value}"`;
+                newProps = newProps + ` style={{ ${mappedAttr}: '${value}' }}`;
               }
             }
             matchCount++;
@@ -195,15 +144,33 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   const prepareTransformedCode = () => {
     try {
       let count = 0;
-      return code.replace(/import.*?;/g, '').replace(/export default function/, 'function').replace(/export default/, '')
-        .replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (match, tag, props) => {
+      return code
+        .replace(/import.*?;/g, '') // Remove imports
+        .replace(/export default function\s+(\w+)/, 'function $1') // Handle "export default function App"
+        .replace(/export default \w+;/, '') // Handle "export default App;" at end
+        .replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (match, tag, props) => {
              const currentIndex = count++;
              return `<InteractiveElement _tag="${tag}" _darwinIndex={${currentIndex}}${props}>`;
-        }).replace(/<\/(nav|button|h1|div|section|header|p|span)>/g, '</InteractiveElement>');
+        })
+        .replace(new RegExp(`<\\/(${TAGS_REGEX})>`, 'g'), '</InteractiveElement>');
     } catch (e) { return ""; }
   };
 
-  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">const { useState, useEffect, useRef } = React; const DarwinTracker = () => null; 
+  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">
+  const { useState, useEffect, useRef } = React; 
+  
+  // --- MOCKS FOR MISSING IMPORTS ---
+  const Github = (p) => <span {...p}>GH</span>;
+  const LogOut = (p) => <span {...p}>LogOut</span>;
+  const Command = (p) => <span {...p}>Cmd</span>;
+  const Heart = (p) => <span {...p}>Heart</span>;
+  const Sparkles = (p) => <span {...p}>Sparkles</span>;
+  const Dashboard = () => <div>[Dashboard Component]</div>;
+  const RepoSelector = () => <div>[RepoSelector Component]</div>;
+  const subscribeToAuth = () => {};
+  const signInWithGithub = async () => {};
+  const signOut = async () => {};
+
   const InteractiveElement = ({ _tag: Tag, _darwinIndex, children, style, ...props }) => { 
     const isAbsolute = style && style.position === 'absolute'; 
     const hasId = props['data-darwin-id'] || props.id; 
