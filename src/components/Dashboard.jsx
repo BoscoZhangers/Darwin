@@ -10,6 +10,7 @@ import { parse } from 'postcss';
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 
 // --- 1. RUNTIME RENDERER (Fixed) ---
+// --- 1. RUNTIME RENDERER (Fixed) ---
 const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
 
@@ -159,6 +160,9 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">
   const { useState, useEffect, useRef } = React; 
   
+  // --- RESTORED HELPER COMPONENT ---
+  const DarwinTracker = () => null;
+
   // --- MOCKS FOR MISSING IMPORTS ---
   const Github = (p) => <span {...p}>GH</span>;
   const LogOut = (p) => <span {...p}>LogOut</span>;
