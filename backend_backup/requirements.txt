@@ -1,10 +1,8 @@
-# Essentials for the API
 fastapi
 uvicorn
 pydantic
 google-genai
-
-# ML Essentials (CPU only)
 torch
 numpy
 scikit-learn
+pandas  
