@@ -141,9 +141,7 @@ export default function App() {
           <div className="flex items-center justify-center gap-2 text-[10px] text-gray-500 uppercase tracking-[0.3em] mb-4 opacity-50">
             <Sparkles size={10} />
             <span className="flex items-center gap-1.5">
-              Built with 
-              <Heart size={10} className="text-red-500 fill-red-500 animate-pulse" /> 
-              Using
+              Powered By
             </span>
           </div>
           
