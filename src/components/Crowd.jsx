@@ -134,7 +134,7 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
     setAgents(currentAgents => {
         let newPool = [...currentAgents];
 
-        // 1. Fill Pool
+        // 1. Fill Pool (Keep existing logic)
         if (newPool.length < capacity) {
             const deficit = capacity - newPool.length;
             for(let i=0; i<deficit; i++) {
@@ -150,7 +150,20 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
             }
         }
 
-        // 2. Assign Logic
+        // --- NEW: CLEANUP ORPHANED AGENTS ---
+        // Identify which bubble IDs are still active
+        const activeBubbleIds = new Set(bubbles.map(b => b.id));
+        
+        // Reset any agent assigned to a bubble that no longer exists
+        newPool.forEach(agent => {
+            if (agent.assignedTo && !activeBubbleIds.has(agent.assignedTo)) {
+                agent.assignedTo = null;
+                agent.color = '#444444'; // Reset color to grey
+            }
+        });
+        // -------------------------------------
+
+        // 2. Assign Logic (Keep existing logic)
         bubbles.forEach(bubble => {
             const targetCount = bubble.count || 0;
             const assignedAgents = newPool.filter(a => a.assignedTo === bubble.id);
@@ -191,7 +204,7 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
                     }
                 }
             } else {
-                 // Update Existing Colors
+                 // Update Existing Colors (e.g. if you change bubble color in dashboard)
                  assignedAgents.forEach(agent => {
                     const agentIndex = newPool.findIndex(a => a.id === agent.id);
                     if(agentIndex !== -1) {
