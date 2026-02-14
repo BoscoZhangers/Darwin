@@ -126,7 +126,7 @@ export default function App() {
             <h1 className="text-6xl font-extrabold tracking-[0.06em] text-white mr-[-0.2em]">Darwin</h1>
             <div className="flex items-center justify-center gap-2 text-gray-400 text-sm uppercase tracking-widest">
                 <Command size={14} /> 
-                <span>UI Development Reimagined</span>
+                <span>Evolve your Websites with AI</span>
             </div>
           </div>
 
