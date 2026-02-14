@@ -116,7 +116,7 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
         gl={{ antialias: true }}
       >
         <color attach="background" args={[bgColor]} />
-        {darkMode && <fog attach="fog" args={[bgColor, 10, 50]} />}
+        {darkMode && <fog attach="fog" args={[bgColor, 25, 100]} />}
 
         <ambientLight intensity={darkMode ? 0.4 : 0.8} />
         <pointLight position={[10, 10, 10]} intensity={1.0} color="#ffffff" />
@@ -125,7 +125,7 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
         <Grid infiniteGrid fadeDistance={100} sectionColor={gridSection} cellColor={gridCell} position={[0, -0.05, 0]} />
         <EffectComposer disableNormalPass>
           <Bloom luminanceThreshold={1} mipmapBlur intensity={darkMode ? 2.5 : 0.2} radius={0.6} />
-          <Vignette eskil={false} offset={0.1} darkness={darkMode ? 1.1 : 0.4} />
+          <Vignette eskil={false} offset={0} darkness={darkMode ? 0.8 : 0.4} />
         </EffectComposer>
 
         {/* --- CROWD NOW HAS ACCESS TO REFS --- */}

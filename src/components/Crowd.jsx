@@ -75,8 +75,7 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
     // --- 2. MOVEMENT LOGIC ---
     const distToTarget = current.distanceTo(target);
     
-    // STOPPING RADIUS: 
-    // Increased slightly (0.2) so they stop cleanly without vibrating
+    // STOPPING RADIUS
     const stopRadius = isWandering ? 0.5 : 0.2; 
     const isMoving = distToTarget > stopRadius;
 
@@ -99,12 +98,8 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
         if(rightLeg.current) rightLeg.current.rotation.x = Math.sin(t) * 0.8;
         group.current.position.y = Math.abs(Math.sin(t)) * 0.1;
     } else {
-        // IDLE ANIMATION (STOPPED)
-        // 1. Gentle breathing bob
+        // IDLE ANIMATION
         group.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.02;
-        
-        // 2. RESET LIMBS (The Fix)
-        // We force them back to 0 so they look like they are standing still
         if(leftLeg.current) leftLeg.current.rotation.x = 0;
         if(rightLeg.current) rightLeg.current.rotation.x = 0;
         if(leftArm.current) leftArm.current.rotation.x = 0; 
@@ -134,7 +129,25 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
     setAgents(currentAgents => {
         let newPool = [...currentAgents];
 
-        // 1. Fill Pool (Keep existing logic)
+        // 1. DOWNSCALE LOGIC (The Fix)
+        // If we have more agents than the new capacity (e.g. going from Demo -> Live), remove them.
+        if (newPool.length > capacity) {
+            // Prioritize keeping agents that are already assigned to a bubble
+            const assigned = newPool.filter(a => a.assignedTo !== null);
+            const unassigned = newPool.filter(a => a.assignedTo === null);
+            
+            // Rebuild pool: Keep assigned first, then fill remainder with unassigned up to capacity
+            const keepCount = capacity;
+            if (assigned.length >= keepCount) {
+                newPool = assigned.slice(0, keepCount);
+            } else {
+                const spaceLeft = keepCount - assigned.length;
+                newPool = [...assigned, ...unassigned.slice(0, spaceLeft)];
+            }
+        }
+
+        // 2. UPSCALE LOGIC
+        // If we need more agents (e.g. going from Live -> Demo)
         if (newPool.length < capacity) {
             const deficit = capacity - newPool.length;
             for(let i=0; i<deficit; i++) {
@@ -150,20 +163,16 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
             }
         }
 
-        // --- NEW: CLEANUP ORPHANED AGENTS ---
-        // Identify which bubble IDs are still active
+        // --- 3. CLEANUP ORPHANED AGENTS ---
         const activeBubbleIds = new Set(bubbles.map(b => b.id));
-        
-        // Reset any agent assigned to a bubble that no longer exists
         newPool.forEach(agent => {
             if (agent.assignedTo && !activeBubbleIds.has(agent.assignedTo)) {
                 agent.assignedTo = null;
-                agent.color = '#444444'; // Reset color to grey
+                agent.color = '#444444';
             }
         });
-        // -------------------------------------
 
-        // 2. Assign Logic (Keep existing logic)
+        // --- 4. ASSIGNMENT LOGIC ---
         bubbles.forEach(bubble => {
             const targetCount = bubble.count || 0;
             const assignedAgents = newPool.filter(a => a.assignedTo === bubble.id);
@@ -179,19 +188,6 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
                         recruitsFound++;
                     }
                 }
-                // Spawn if needed
-                const stillNeeded = needed - recruitsFound;
-                for (let i = 0; i < stillNeeded; i++) {
-                     const angle = Math.random() * Math.PI * 2;
-                     const radius = 40; 
-                     newPool.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        startPos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
-                        assignedTo: bubble.id,
-                        color: bubble.color || 'blue',
-                        speedOffset: Math.random(),
-                    });
-                }
             } else if (assignedAgents.length > targetCount) {
                 // Release Surplus
                 const excess = assignedAgents.length - targetCount;
@@ -204,7 +200,7 @@ export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
                     }
                 }
             } else {
-                 // Update Existing Colors (e.g. if you change bubble color in dashboard)
+                 // Sync Colors
                  assignedAgents.forEach(agent => {
                     const agentIndex = newPool.findIndex(a => a.id === agent.id);
                     if(agentIndex !== -1) {
