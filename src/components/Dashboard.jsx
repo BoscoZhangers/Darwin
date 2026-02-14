@@ -6,220 +6,259 @@ import AnalyticsPanel from './AnalyticsPanel';
 import HistoryPanel from './HistoryPanel';
 import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, BACKEND_PORT, PORT} from "../constants";
-import { parse } from 'postcss';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
+const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
+
+// Helper to detect images
+const isImageFile = (path) => /\.(svg|png|jpe?g|gif|ico|webp)$/i.test(path);
 
 // --- 1. RUNTIME RENDERER ---
-const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
+const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
 
   const sendSelection = useCallback(() => {
     if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ 
-        type: 'SYNC_SELECTION', 
-        id: activeId, 
-        color: activeColor 
-      }, '*');
+      iframeRef.current.contentWindow.postMessage({ type: 'SYNC_SELECTION', id: activeId, color: activeColor }, '*');
     }
   }, [activeId, activeColor]);
 
-  useEffect(() => {
-    sendSelection();
-  }, [sendSelection]);
-
-  function parseStyleInner(inner) {
-    let x = null;
-    let y = null;
-    let backgroundColor = { r: null, g: null, b: null };
-    let color = { r: null, g: null, b: null };
-
-    const leftMatch = inner.match(/left\s*:\s*['"]?(\d+)?['"]?/);
-    if (leftMatch) { x = parseInt(leftMatch[1], 10); inner = inner.replace(leftMatch[0], ""); }
-
-    const topMatch = inner.match(/top\s*:\s*['"]?(\d+)?['"]?/);
-    if (topMatch) { y = parseInt(topMatch[1], 10); inner = inner.replace(topMatch[0], ""); }
-
-    function parseColor(str) {
-        if (!str) return { r: null, g: null, b: null };
-        str = str.trim();
-        if (str.startsWith("#")) {
-            const hex = str.replace("#", "");
-            return { r: parseInt(hex.substring(0, 2), 16), g: parseInt(hex.substring(2, 4), 16), b: parseInt(hex.substring(4, 6), 16) };
-        }
-        return { r: null, g: null, b: null };
-    }
-
-    const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
-    if (bgMatch) { backgroundColor = parseColor(bgMatch[1]); inner = inner.replace(bgMatch[0], ""); }
-
-    const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
-    if (colorMatch) { color = parseColor(colorMatch[1]); inner = inner.replace(colorMatch[0], ""); }
-
-    inner = inner.replace(/,,+/g, ",").replace(/^,|,$/g, "").trim();
-    const styleObject = {};
-    if (inner.length > 0) {
-        const pairs = inner.split(",");
-        pairs.forEach(pair => {
-            const [key, value] = pair.split(":");
-            try { if (key && value) styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10); } catch (e) {}
-        });
-    }
-    styleObject.backgroundColor_R = backgroundColor.r ?? -1;
-    styleObject.backgroundColor_G = backgroundColor.g ?? -1;
-    styleObject.backgroundColor_B = backgroundColor.b ?? -1;
-    styleObject.color_R = color.r ?? -1;
-    styleObject.color_G = color.g ?? -1;
-    styleObject.color_B = color.b ?? -1;
-
-    return { x, y, style: styleObject };
-  }
-
-  const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
+  useEffect(() => { sendSelection(); }, [sendSelection]);
 
   useEffect(() => {
     const handleMessage = (e) => {
-      if (e.data.type === 'UPDATE_POS') {
-        const { index, x, y, dataDarwinId } = e.data;
-        let matchCount = 0;
-        const newCode = code.replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (fullMatch, tag, props) => {
-            if (matchCount === index) {
-               let newProps = props;
-               if (newProps.match(/left:\s*\d+/)) newProps = newProps.replace(/left:\s*(\d+)/, `left: ${Math.round(x)}`);
-               else if (newProps.includes('style={{')) newProps = newProps.replace(/style=\{\{/, `style={{ left: ${Math.round(x)}, `);
-               else newProps = newProps + ` style={{ left: ${Math.round(x)} }}`;
-
-               if (newProps.match(/top:\s*\d+/)) newProps = newProps.replace(/top:\s*(\d+)/, `top: ${Math.round(y)}`);
-               else if (newProps.includes('style={{')) newProps = newProps.replace(/style=\{\{/, `style={{ top: ${Math.round(y)}, `);
-               else if (!newProps.includes('style=')) newProps = newProps + ` style={{ top: ${Math.round(y)} }}`;
-               
-               matchCount++;
-               return `<${tag}${newProps}>`;
-            }
-            matchCount++;
-            return fullMatch; 
-        });
-        if (newCode !== code) onUpdateCode(newCode);
-        handleUpdateLayout(dataDarwinId || index, x, y);
-      }
-      if (e.data.type === 'UPDATE_STYLE') {
-        const { index, attr, value } = e.data;
-        let matchCount = 0;
-        const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
-        const newCode = code.replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (fullMatch, tag, props) => {
-          if (matchCount === index) {
-            let newProps = props;
-            const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
-            if (attrEqRegex.test(newProps)) {
-              newProps = newProps.replace(attrEqRegex, `${mappedAttr}="${value}"`);
-            } else {
-              const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
-              const styleMatch = newProps.match(styleObjRegex);
-              if (styleMatch) {
-                let inner = styleMatch[1];
-                const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
-                if (stylePropRegex.test(inner)) inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
-                else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
-                newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`);
-                var {x, y, style} = parseStyleInner(inner);
-                handleUpdateLayout(index, x, y, style);
-              } else {
-                newProps = newProps + ` style={{ ${mappedAttr}: '${value}' }}`;
-              }
-            }
-            matchCount++;
-            return `<${tag}${newProps}>`;
-          }
-          matchCount++;
-          return fullMatch;
-        });
-        if (newCode !== code) onUpdateCode(newCode);
-      }
+      if (!e.data || !e.data.type) return;
+      if (e.data.type === 'UPDATE_POS') handleUpdateLayout(e.data.dataDarwinId || e.data.index, e.data.x, e.data.y);
       if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
+      if (e.data.type === 'LOG') console.log("[Preview Log]", e.data.message);
+      if (e.data.type === 'ERROR') {
+         console.error("[Preview Error]", e.data.message);
+         window.parent.postMessage({ type: 'SYSTEM_LOG', role: 'error', text: `Preview Error: ${e.data.message}` }, '*');
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [code, onUpdateCode, onExtractStart, handleUpdateLayout]);
+  }, [onUpdateCode, onExtractStart, handleUpdateLayout]);
 
-  const prepareTransformedCode = () => {
-    try {
-      let count = 0;
-      return code
-        .replace(/import.*?;/g, '') // Remove imports
-        .replace(/export default function\s+(\w+)/, 'function $1') // Handle "export default function App"
-        .replace(/export default \w+;/, '') // Handle "export default App;" at end
-        .replace(new RegExp(`<(${TAGS_REGEX})\\b([^>]*)>`, 'g'), (match, tag, props) => {
-             const currentIndex = count++;
-             return `<InteractiveElement _tag="${tag}" _darwinIndex={${currentIndex}}${props}>`;
-        })
-        .replace(new RegExp(`<\\/(${TAGS_REGEX})>`, 'g'), '</InteractiveElement>');
-    } catch (e) { return ""; }
+  const prepareFileSystem = () => {
+    const effectiveFiles = { ...files };
+    if (proposedCode) effectiveFiles['src/App.jsx'] = proposedCode;
+    return JSON.stringify(effectiveFiles);
   };
 
-  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">
-  const { useState, useEffect, useRef } = React; 
-  
-  // --- MOCKS ---
-  const DarwinTracker = () => null;
-  const Github = (p) => <span {...p}>GH</span>;
-  const LogOut = (p) => <span {...p}>LogOut</span>;
-  const Command = (p) => <span {...p}>Cmd</span>;
-  const Heart = (p) => <span {...p}>Heart</span>;
-  const Sparkles = (p) => <span {...p}>Sparkles</span>;
-  const Dashboard = () => <div>[Dashboard Component]</div>;
-  const RepoSelector = () => <div>[RepoSelector Component]</div>;
-  const subscribeToAuth = () => {};
-  const signInWithGithub = async () => {};
-  const signOut = async () => {};
+  const srcDoc = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <style>
+    body { 
+      margin: 0; 
+      background: #fff; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      user-select: none; 
+    }
+    .mode-edit .darwin-draggable { cursor: move; }
+    .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; }
+    .mode-live .darwin-draggable { cursor: grab; }
+    .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }
+  </style>
+</head>
+<body class="mode-${mode}">
+  <div id="root"></div>
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      window.parent.postMessage({ type: 'ERROR', message: message + ' (' + source + ':' + lineno + ')' }, '*');
+    };
+    const originalError = console.error;
+    console.error = function(...args) {
+      window.parent.postMessage({ type: 'ERROR', message: args.join(' ') }, '*');
+      originalError.apply(console, args);
+    };
+  </script>
+  <script type="text/babel" data-presets="react,env">
+    const files = ${prepareFileSystem()};
+    const modules = {};
+    const globalComponentIndex = 0;
 
-  const InteractiveElement = ({ _tag: Tag, _darwinIndex, children, style, ...props }) => { 
-    const isAbsolute = style && style.position === 'absolute'; 
-    const hasId = props['data-darwin-id'] || props.id; 
-    const canInteract = isAbsolute || ('${mode}' === 'live' && hasId); 
-    const [highlightColor, setHighlightColor] = useState(null);
-    useEffect(() => {
-      const handleMsg = (e) => {
-        if (e.data.type === 'SYNC_SELECTION') {
-           if (e.data.id == _darwinIndex) {
-              setHighlightColor(e.data.color || '#00f3ff');
-           } else {
-              setHighlightColor(null);
-           }
+    const isImageFile = (path) => /\\.(svg|png|jpe?g|gif|ico|webp)$/i.test(path);
+
+    function applyDarwinTransform(code) {
+      try {
+        const TAGS = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
+        let idx = 0;
+        return code.replace(new RegExp('<(' + TAGS + ')\\\\b([^>]*)>', 'g'), (match, tag, props) => {
+             const currentIndex = idx++;
+             return \`<InteractiveElement _tag="\${tag}" _darwinIndex={\${currentIndex}}\${props}>\`;
+        }).replace(new RegExp('<\\\\/(' + TAGS + ')>', 'g'), '</InteractiveElement>');
+      } catch(e) { return code; }
+    }
+
+    const { useState, useEffect, useRef } = React;
+    const InteractiveElement = ({ _tag: Tag, _darwinIndex, children, style, ...props }) => { 
+      const isAbsolute = style && style.position === 'absolute'; 
+      const hasId = props['data-darwin-id'] || props.id; 
+      const canInteract = isAbsolute || ('${mode}' === 'live' && hasId); 
+      const [highlightColor, setHighlightColor] = useState(null);
+
+      useEffect(() => {
+        const handleMsg = (e) => {
+          if (e.data.type === 'SYNC_SELECTION') {
+             if (e.data.id == _darwinIndex || (hasId && e.data.id == hasId)) setHighlightColor(e.data.color || '#00f3ff');
+             else setHighlightColor(null);
+          }
+        };
+        window.addEventListener('message', handleMsg);
+        return () => window.removeEventListener('message', handleMsg);
+      }, [_darwinIndex, hasId]);
+
+      if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; 
+
+      const [pos, setPos] = useState({ x: parseInt(style?.left || 0), y: parseInt(style?.top || 0) }); 
+      const [isDragging, setIsDragging] = useState(false); 
+      const dragOffset = useRef({ x: 0, y: 0 }); 
+
+      const handleMouseDown = (e) => { 
+        e.stopPropagation(); 
+        if ('${mode}' === 'live') { 
+          e.preventDefault();
+          const rect = e.target.getBoundingClientRect(); 
+          const computed = window.getComputedStyle(e.target); 
+          const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag }; 
+          window.parent.postMessage({ type: 'EXTRACT_COMPONENT', tag: props['data-darwin-id'] || props.id || Tag, id: _darwinIndex, clientX: e.clientX, clientY: e.clientY, meta: meta }, '*'); 
+          return; 
+        } 
+        e.preventDefault();
+        setIsDragging(true); 
+        dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }; 
+      }; 
+
+      useEffect(() => { 
+        if (!isDragging || '${mode}' === 'live') return; 
+        const handleMove = (e) => { 
+          let newX = e.clientX - dragOffset.current.x; 
+          let newY = e.clientY - dragOffset.current.y; 
+          if (newX < 0) newX = 0; if (newY < 0) newY = 0; 
+          setPos({ x: newX, y: newY }); 
+        }; 
+        const handleUp = () => { 
+          setIsDragging(false); 
+          window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: pos.x, y: pos.y }, '*'); 
+        }; 
+        window.addEventListener('mousemove', handleMove); 
+        window.addEventListener('mouseup', handleUp); 
+        return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); }; 
+      }, [isDragging, pos]); 
+
+      const activeStyle = highlightColor ? { outline: '2px solid ' + highlightColor, boxShadow: '0 0 15px ' + highlightColor + ', inset 0 0 10px ' + highlightColor, zIndex: 9999, position: isAbsolute ? 'absolute' : 'relative', transition: 'all 0.2s ease' } : {};
+      return <Tag style={{ ...style, ...activeStyle, left: pos.x, top: pos.y }} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
+    };
+
+    const EXTERNALS = {
+      'react': React,
+      'react-dom': ReactDOM,
+      'react-dom/client': ReactDOM,
+      'lucide-react': new Proxy({}, { 
+          get: (target, prop) => (props) => React.createElement('svg', { ...props, viewBox: "0 0 24 24", width: 24, height: 24, fill: "none", stroke: "currentColor", strokeWidth: 2, style: { ...props.style, opacity: 0.5 } }, 
+            React.createElement('circle', { cx: 12, cy: 12, r: 10 }), 
+            React.createElement('path', { d: "M12 8v8M8 12h8" })
+          ) 
+      }),
+      'firebase/app': {
+        initializeApp: (config) => {
+          if (!window.firebase) throw new Error("Firebase SDK not loaded.");
+          if (firebase.apps.length > 0) return firebase.apps[0];
+          return firebase.initializeApp(config);
         }
-      };
-      window.addEventListener('message', handleMsg);
-      return () => window.removeEventListener('message', handleMsg);
-    }, [_darwinIndex]);
-    if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; 
-    const [pos, setPos] = useState({ x: parseInt(style?.left || 0), y: parseInt(style?.top || 0) }); 
-    const [isDragging, setIsDragging] = useState(false); 
-    const dragOffset = useRef({ x: 0, y: 0 }); 
-    const handleMouseDown = (e) => { e.stopPropagation(); e.preventDefault(); if ('${mode}' === 'live') { const rect = e.target.getBoundingClientRect(); const computed = window.getComputedStyle(e.target); const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag }; window.parent.postMessage({ type: 'EXTRACT_COMPONENT', tag: props['data-darwin-id'] || props.id || Tag, id: _darwinIndex, clientX: e.clientX, clientY: e.clientY, meta: meta }, '*'); return; } setIsDragging(true); dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }; }; 
-    useEffect(() => { if (!isDragging || '${mode}' === 'live') return; const handleMove = (e) => { let newX = e.clientX - dragOffset.current.x; let newY = e.clientY - dragOffset.current.y; if (newX < 0) newX = 0; if (newY < 0) newY = 0; setPos({ x: newX, y: newY }); }; const handleUp = () => { setIsDragging(false); window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, x: pos.x, y: pos.y }, '*'); }; window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp); return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); }; }, [isDragging, pos]); 
-    const activeStyle = highlightColor ? { outline: '2px solid ' + highlightColor, boxShadow: '0 0 15px ' + highlightColor + ', inset 0 0 10px ' + highlightColor, zIndex: 9999, position: isAbsolute ? 'absolute' : 'relative', transition: 'all 0.2s ease' } : {};
-    return <Tag style={{ ...style, ...activeStyle, left: pos.x, top: pos.y }} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
-  }; 
-  
-  try { 
-    ${prepareTransformedCode()} 
-    const root = ReactDOM.createRoot(document.getElementById('root')); 
-    root.render(<App />); 
-  } catch (err) { 
-    document.body.innerHTML = \`
-      <div style="background-color: #09090b; color: #71717a; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; text-align: center;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
-          <path d="m19 5-3 3"/><path d="m2 22 3-3"/><path d="M6.3 20.3a3 3 0 0 0 4.2 0l1.6-1.6a2 2 0 0 0 0-2.8l-2.1-2.1a2 2 0 0 0-2.8 0l-1.6 1.6a3 3 0 0 0 0 4.2Z"/><path d="M14.1 12.9a2 2 0 0 0 0-2.8l-2.1-2.1a2 2 0 0 0-2.8 0l-1.6 1.6"/><path d="m15 15 2-2"/><path d="M22 2 2 22"/>
-        </svg>
-        <h3 style="margin: 0 0 8px; font-weight: 600; color: #e4e4e7;">Preview Unavailable</h3>
-        <p style="margin: 0; font-size: 14px; max-width: 300px; line-height: 1.5;">\$\{err.message\}</p>
-      </div>
-    \`; 
-  } 
-  </script></body></html>`;
+      },
+      'firebase/database': {
+        getDatabase: (app) => firebase.database(app),
+        ref: (db, path) => db.ref(path),
+        set: (ref, value) => ref.set(value),
+        push: (ref, value) => ref.push(value),
+        update: (ref, value) => ref.update(value),
+        onDisconnect: (ref) => ref.onDisconnect(),
+        increment: (val) => firebase.database.ServerValue.increment(val)
+      }
+    };
 
-  return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
+    function resolvePath(base, relative) {
+      if (!relative.startsWith('.')) return relative;
+      const stack = base.split('/');
+      stack.pop();
+      const parts = relative.split('/');
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i] === '.') continue;
+        if (parts[i] === '..') stack.pop();
+        else stack.push(parts[i]);
+      }
+      let path = stack.join('/');
+      if (files[path]) return path;
+      if (files[path + '.jsx']) return path + '.jsx';
+      if (files[path + '.js']) return path + '.js';
+      const imgExts = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico'];
+      for (let ext of imgExts) {
+         if (files[path + ext]) return path + ext;
+      }
+      return path;
+    }
+
+    function require(currentPath, importPath) {
+      if (EXTERNALS[importPath]) return EXTERNALS[importPath];
+      
+      const resolved = resolvePath(currentPath, importPath);
+
+      if (files[resolved] && isImageFile(resolved)) {
+         return files[resolved];
+      }
+      
+      if (isImageFile(importPath) || isImageFile(resolved)) {
+         return "https://placehold.co/100x100?text=Missing+Asset";
+      }
+
+      if (importPath.endsWith('.css')) {
+         if (files[resolved]) {
+            const style = document.createElement('style');
+            style.textContent = files[resolved];
+            document.head.appendChild(style);
+         }
+         return {};
+      }
+
+      if (!modules[resolved]) {
+        if (!files[resolved]) {
+           throw new Error(\`Module not found: \${importPath} (resolved: \${resolved})\`);
+        }
+        const module = { exports: {} };
+        const darwinCode = applyDarwinTransform(files[resolved]);
+        const transformed = Babel.transform(darwinCode, { presets: ['react', 'env'], filename: resolved }).code;
+        const wrapper = new Function('require', 'module', 'exports', 'React', 'InteractiveElement', transformed);
+        wrapper((path) => require(resolved, path), module, module.exports, React, InteractiveElement);
+        modules[resolved] = module.exports;
+      }
+      return modules[resolved];
+    }
+
+    try {
+        const entry = ['src/main.jsx', 'src/index.jsx', 'src/App.jsx'].find(e => files[e]);
+        if (entry) require('root', './' + entry);
+        else document.body.innerHTML = 'No entry point found';
+    } catch (err) {
+        console.error(err);
+    }
+  </script>
+</body>
+</html>`;
+
+  return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-modals" />;
 };
-// --- 2. EDITOR UTILS (Unchanged) ---
+
+
+// --- 2. EDITOR UTILS ---
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
 
 const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSelect, onTabClose, onTabClick, onCodeChange, onSave, loadingFile, isSaving }) => { 
@@ -326,8 +365,9 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
                        className="absolute inset-0 w-full h-full p-4 bg-transparent text-transparent caret-black dark:caret-white font-mono text-xs leading-5 resize-none outline-none whitespace-pre overflow-auto"
                        wrap="off"
                        spellCheck="false"
-                       value={fileContents[activeTab]}
-                       onChange={(e) => onCodeChange(activeTab, e.target.value)}
+                       value={fileContents[activeTab].startsWith('data:image') ? '[Binary Image Data]' : fileContents[activeTab]}
+                       onChange={(e) => !fileContents[activeTab].startsWith('data:image') && onCodeChange(activeTab, e.target.value)}
+                       readOnly={fileContents[activeTab].startsWith('data:image')}
                     />
                 </div>
             </>
@@ -380,6 +420,26 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
   }, [darkMode]);
 
+  // Capture System Logs from Iframe (WITH DEDUPLICATION)
+  useEffect(() => {
+      const handleSysLog = (e) => {
+          if (e.data.type === 'SYSTEM_LOG') {
+              setAiLog(prev => {
+                  const newLog = { role: e.data.role || 'system', text: e.data.text };
+                  if (prev.length > 0) {
+                      const lastLog = prev[prev.length - 1];
+                      if (lastLog.text === newLog.text && lastLog.role === newLog.role) {
+                          return prev; 
+                      }
+                  }
+                  return [...prev, newLog];
+              });
+          }
+      };
+      window.addEventListener('message', handleSysLog);
+      return () => window.removeEventListener('message', handleSysLog);
+  }, []);
+
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
   const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value}, '*'); } catch (e) {} };
 
@@ -392,35 +452,113 @@ export default function Dashboard({ user, token, repo, onBack }) {
     return bubble ? bubble.color : null;
   };
 
+  // --- NEW: FETCH MODEL DATA FOR DEMO MODE ---
+  const fetchModelPredictions = useCallback(async (currentBubbles) => {
+      setAiLog(prev => [...prev, { role: 'system', text: 'Fetching AI Model predictions...' }]);
+      
+      const newBubbles = await Promise.all(currentBubbles.map(async (b) => {
+          let id = b.label;
+          // Map ID numbers to strings if needed (legacy support)
+          if (typeof id == "number") {
+             const mockIds = ["nav-main", "hero-text", "btn-cta", "description", "btn-cta-2"];
+             if(mockIds[id]) id = mockIds[id];
+          }
+          
+          try {
+              const resp = await fetch(APP_HOST + BACKEND_PORT + '/api/get_hit_count', { 
+                  method: 'POST', 
+                  headers: { 'Content-Type': 'application/json' }, 
+                  body: JSON.stringify({ 
+                      x: b.meta?.x || 0, 
+                      y: b.meta?.y || 0, 
+                      div_id: id 
+                  }) 
+              });
+              if (!resp.ok) return b;
+              const json = await resp.json();
+              if (typeof json?.count === 'number') {
+                  return { ...b, count: json.count };
+              }
+          } catch(e) { console.error(e); }
+          return b;
+      }));
+      
+      setBubbles(newBubbles);
+      setAiLog(prev => [...prev, { role: 'success', text: 'Model data loaded.' }]);
+  }, []);
+
+  // --- UPDATED EFFECT: MODE SWITCHING ---
   useEffect(() => {
-    if (demoMode || !repo) return;
-    const repoId = repo.full_name;
-    const unsubscribe = subscribeToSwarm(repoId, (type, data) => {
-      if (type === 'users_full') {
-        const activeIds = data ? Object.keys(data) : [];
-        setTotalUsers(activeIds.length);
-        setRawUsers(data || {});
-      }
-      if (type === 'clicks') {
-         setClicksData(data || {}); 
-         setBubbles(prevBubbles => 
-            prevBubbles.map(bubble => {
-              const newCount = data[bubble.label];
-              return (newCount !== undefined && newCount !== bubble.count) ? { ...bubble, count: newCount } : bubble;
-            })
-         );
-      }
-    }, demoMode);
-    return () => unsubscribe && unsubscribe();
-  }, [demoMode, repo]);
+    if (demoMode) {
+        // --- DEMO MODE (MODEL) ---
+        // 1. Fetch predictions for existing bubbles immediately
+        if (bubbles.length > 0) {
+            fetchModelPredictions(bubbles);
+        }
+        // 2. Ensure totalUsers is distinct (The Scene uses hardcoded 50, but we can set it here too if needed)
+        // setTotalUsers(50); 
+    } else {
+        // --- LIVE MODE (FIREBASE) ---
+        if (!repo) return;
+        const repoId = repo.full_name;
+        
+        // Subscribe to Firebase updates
+        const unsubscribe = subscribeToSwarm(repoId, (type, data) => {
+          if (type === 'users_full') {
+            const activeIds = data ? Object.keys(data) : [];
+            setTotalUsers(activeIds.length);
+            setRawUsers(data || {});
+          }
+          if (type === 'clicks') {
+             setClicksData(data || {}); 
+             setBubbles(prevBubbles => 
+                prevBubbles.map(bubble => {
+                  const newCount = data[bubble.label];
+                  // Only update if count changed
+                  return (newCount !== undefined && newCount !== bubble.count) ? { ...bubble, count: newCount } : bubble;
+                })
+             );
+          }
+        }, false); // Pass 'false' to indicate LIVE mode to the subscriber if it needs it
+        
+        return () => unsubscribe && unsubscribe();
+    }
+  }, [demoMode, repo]); // Re-run when mode changes
 
   // --- GIT SYNC & FILE LOADING ---
+  const handleFileSelect = async (file) => { 
+    if (file.type === 'dir') return; 
+    setOpenTabs(prev => { if (prev.includes(file.path)) return prev; return [...prev, file.path]; }); 
+    setActiveTab(file.path); 
+    if (fileContents[file.path]) return fileContents[file.path]; 
+    setLoadingFile(true); 
+    const octokit = new Octokit({ auth: token }); 
+    try { 
+      const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); 
+      
+      let content;
+      // Handle Binary Images (Convert to Base64 Data URI)
+      if (isImageFile(file.path)) {
+         const ext = file.path.split('.').pop().toLowerCase();
+         const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext}`;
+         content = `data:${mime};base64,${data.content.replace(/\n/g, '')}`;
+      } else {
+         // --- UTF-8 DECODING FIX FOR EMOJIS ---
+         const binaryString = atob(data.content);
+         const bytes = new Uint8Array(binaryString.length);
+         for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+         }
+         content = new TextDecoder().decode(bytes);
+      }
+
+      setFileContents(prev => ({ ...prev, [file.path]: content })); 
+      return content; 
+    } catch (e) {console.error(e);} 
+    finally { setLoadingFile(false); } 
+  };
+
   useEffect(() => { 
-    // async function run_pipeline(contents) { 
-    //   const resp = await fetch(APP_HOST + PORT + "/api/run_pipeline", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: contents }) }); 
-    //   if (!resp.ok) return; 
-    //   await resp.json(); 
-    // } 
     async function initSync() { 
       if (!token || !repo) return; 
       const octokit = new Octokit({ auth: token }); 
@@ -428,16 +566,25 @@ export default function Dashboard({ user, token, repo, onBack }) {
         setAiLog(prev => [...prev, { role: 'system', text: 'Fetching file tree...' }]); 
         const { data: repoData } = await octokit.request('GET /repos/{owner}/{repo}', { owner: repo.owner.login, repo: repo.name }); 
         const { data: treeData } = await octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1', { owner: repo.owner.login, repo: repo.name, tree_sha: repoData.default_branch }); 
+        
         const tree = []; const lookup = {}; 
         treeData.tree.forEach(item => { const parts = item.path.split('/'); const fileName = parts[parts.length - 1]; const node = { ...item, name: fileName, children: [] }; lookup[item.path] = node; if (parts.length === 1) tree.push(node); else if (lookup[parts.slice(0, -1).join('/')]) lookup[parts.slice(0, -1).join('/')].children.push(node); }); 
         const mapType = (nodes) => nodes.map(n => ({ ...n, type: n.type === 'tree' ? 'dir' : 'file', children: n.children ? mapType(n.children) : [] })); 
         setFileTree(mapType(tree)); 
-        setAiLog(prev => [...prev, { role: 'success', text: 'File tree loaded.' }]); 
-        const appFile = treeData.tree.find(f => f.path === 'src/App.jsx'); 
-        if (appFile) { 
-          const contents = await handleFileSelect({ path: 'src/App.jsx', sha: appFile.sha, name: 'App.jsx', type: 'file' }); 
-          // run_pipeline(contents); 
-        } 
+        
+        // --- MULTI-FILE LOADING ---
+        const srcFiles = treeData.tree.filter(f => f.path.startsWith('src/') && (
+            f.path.endsWith('.jsx') || f.path.endsWith('.js') || f.path.endsWith('.css') || isImageFile(f.path)
+        ));
+        setAiLog(prev => [...prev, { role: 'system', text: `Loading ${srcFiles.length} project files...` }]);
+        
+        await Promise.all(srcFiles.map(f => handleFileSelect(f)));
+
+        setAiLog(prev => [...prev, { role: 'success', text: 'Project loaded successfully.' }]); 
+
+        const appFile = srcFiles.find(f => f.path.includes('App.jsx')) || srcFiles[0];
+        if (appFile) setActiveTab(appFile.path);
+
       } catch (err) { console.error(err); } 
     } 
     initSync(); 
@@ -453,6 +600,10 @@ export default function Dashboard({ user, token, repo, onBack }) {
         repo: repo.name,
         path: activeTab,
       });
+
+      if (isImageFile(activeTab)) {
+         throw new Error("Cannot edit binary files directly.");
+      }
 
       await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
         owner: repo.owner.login,
@@ -473,55 +624,29 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
 
   // --- AI GENERATION ---
-  // Find the handleAiGenerate function in Dashboard.jsx and replace it with this:
 const handleAiGenerate = async () => {
   if (!aiPrompt.trim()) return;
   setIsAiGenerating(true);
-  
-  // Safety check: Ensure the URL is formed correctly
   const apiUrl = `${APP_HOST}${PORT}/api/generate_code`;
   
   try {
       const currentCode = fileContents['src/App.jsx'] || '';
-      
-      setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
+      setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes...` }]);
 
-      console.log(aiPrompt)
       const resp = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              prompt: aiPrompt,
-              code: currentCode
-          })
+          body: JSON.stringify({ prompt: aiPrompt, code: currentCode })
       });
 
-      if (!resp.ok) {
-          const errorData = await resp.json().catch(() => ({}));
-          throw new Error(errorData.error || `Server responded with ${resp.status}`);
-      }
-
+      if (!resp.ok) throw new Error("Backend Error");
       const data = await resp.json();
       if (data.code) {
           setProposedCode(data.code);
-          setAiLog(prev => [...prev, { role: 'success', text: 'AI generated a new version of App.jsx. Review above!' }]);
-      } else {
-          throw new Error("AI returned empty code.");
+          setAiLog(prev => [...prev, { role: 'success', text: 'AI generated new code. Review above!' }]);
       }
-
   } catch (err) {
-      console.error("AI Assistant Error:", err);
-      
-      // Detailed error logging for the UI
-      let errorMessage = "AI Generation Failed.";
-      if (err.message.includes("Failed to fetch")) {
-          errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
-      } else {
-          errorMessage = `AI Error: ${err.message}`;
-      }
-
-      setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
-      setActivePanel('logs'); // Auto-switch to logs so you see the error
+      setAiLog(prev => [...prev, { role: 'error', text: `AI Error: ${err.message}` }]);
   } finally {
       setIsAiGenerating(false);
   }
@@ -536,38 +661,22 @@ const handleAiGenerate = async () => {
       }
   };
 
-  const handleFileSelect = async (file) => { 
-    if (file.type === 'dir') return; 
-    setOpenTabs(prev => { if (prev.includes(file.path)) return prev; return [...prev, file.path]; }); 
-    setActiveTab(file.path); 
-    if (fileContents[file.path]) return fileContents[file.path]; 
-    setLoadingFile(true); 
-    const octokit = new Octokit({ auth: token }); 
-    try { 
-      const { data } = await octokit.request('GET /repos/{owner}/{repo}/git/blobs/{file_sha}', { owner: repo.owner.login, repo: repo.name, file_sha: file.sha }); 
-      const content = atob(data.content); 
-      setFileContents(prev => ({ ...prev, [file.path]: content })); 
-      return content; 
-    } catch (e) {console.error(e);} 
-    finally { setLoadingFile(false); } 
-  };
-
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
   const handleCodeChange = (path, newCode) => { setFileContents(prev => ({ ...prev, [path]: newCode })); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
-  const handleUpdateLayout = (id, newX, newY, predict_other={}) => { 
+  
+  // FIX: Wrapped in useCallback to prevent infinite listener re-binding in IframeRenderer
+  const handleUpdateLayout = useCallback((id, newX, newY, predict_other={}) => { 
     const fetchBackendCount = async () => { 
       try { 
-        console.log(id)
         if (typeof id == "number") {
-          if (id == 1) id = "nav-main"
-          else if (id == 3) id = "hero-text"
-          else if (id == 4) id = "btn-cta"
-          else if (id == 5) id = "description"
-          else id = 'btn-cta-2'
+           // Mocks for demo, would be real IDs in production
+           const mockIds = ["nav-main", "hero-text", "btn-cta", "description", "btn-cta-2"];
+           if(mockIds[id]) id = mockIds[id];
         }
-    const resp = await fetch(APP_HOST + BACKEND_PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id, predict_other: predict_other}) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.label === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); };
+    const resp = await fetch(APP_HOST + BACKEND_PORT + '/api/get_hit_count', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: newX, y: newY, div_id: id, predict_other: predict_other}) }); if (!resp.ok) return; const json = await resp.json(); if (typeof json?.count === 'number') setBubbles(prev => prev.map(b => b.label === id ? { ...b, count : json?.count} : b)) } catch (e) { console.error(e); } }; if (demoMode) fetchBackendCount(); 
+  }, [demoMode]);
 
   useEffect(() => {
     if (!extractedGhost) return;
@@ -597,33 +706,15 @@ const handleAiGenerate = async () => {
   useEffect(() => {
     const handleMove = (e) => {
       if (isResizing) {
-        // Calculate new width relative to the window edge
         const newWidth = window.innerWidth - e.clientX;
-        // Optional: Add min/max constraints to prevent breaking the layout
         const clampedWidth = Math.max(300, Math.min(newWidth, window.innerWidth - 100));
         setRightPanelWidth(clampedWidth);
       }
     };
     
-    const handleUp = () => {
-      setIsResizing(false);
-      // Re-enable pointer events on iframes when done
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-    };
-
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleUp);
-      // Vital: Disable selection so text doesn't highlight while dragging
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-    };
+    const handleUp = () => { setIsResizing(false); document.body.style.userSelect = ''; document.body.style.cursor = ''; };
+    if (isResizing) { window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp); document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize'; }
+    return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
   }, [isResizing]);
 
   const handleClearEnvironment = () => { setTotalUsers(0); setBubbles([]); };
@@ -637,7 +728,6 @@ const handleAiGenerate = async () => {
             <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-500 bg-yellow-50 dark:text-yellow-400 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><BarChart2 size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'text-purple-600 bg-purple-50 dark:text-neon-purple dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Code size={20} /></button>
             <button onClick={() => setViewMode('history')} className={`p-3 rounded-xl transition-all ${viewMode === 'history' ? 'text-orange-500 bg-orange-50 dark:text-orange-500 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><History size={20} /></button>
-            {/* NEW AI ICON */}
             <button onClick={() => setActivePanel('ai')} className={`p-3 rounded-xl transition-all ${activePanel === 'ai' ? 'text-pink-600 bg-pink-50 dark:text-pink-400 dark:bg-pink-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Sparkles size={20} /></button>
             <button onClick={() => setActivePanel('properties')} className={`p-3 rounded-xl transition-all ${activePanel === 'properties' ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Shapes size={20} /></button>
         </div>
@@ -696,15 +786,10 @@ const handleAiGenerate = async () => {
            <div className="flex flex-col h-full bg-white dark:bg-[#1e1e1e]">
               <div className="h-10 flex items-center justify-between px-4 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-black/20"><span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2"><Globe size={12}/> Live Preview</span><div className={`text-[10px] px-2 rounded flex items-center gap-1 ${demoMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400'}`}>{demoMode ? 'EDIT MODE' : 'EXTRACT MODE'}</div></div>
               <div className="flex-1 bg-white relative">
-
-                 {/* --- THE FIX: Invisible Shield --- */}
-                 {/* This covers the iframe ONLY when resizing, keeping mouse events in the parent */}
-                 {isResizing && (
-                    <div className="absolute inset-0 z-50 bg-transparent" />
-                 )}
-
+                 {isResizing && <div className="absolute inset-0 z-50 bg-transparent" />}
                  <IframeRenderer 
-                    code={proposedCode || fileContents['src/App.jsx'] || ''}  // PREVIEW PROPOSED CODE IF AVAILABLE
+                    files={fileContents} 
+                    proposedCode={proposedCode}
                     onUpdateCode={handleCodeUpdateFromPreview} 
                     handleUpdateLayout={handleUpdateLayout} 
                     mode={demoMode ? 'edit' : 'live'} 
@@ -719,11 +804,9 @@ const handleAiGenerate = async () => {
             <div className="flex border-b border-gray-200 dark:border-white/10">
                <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-yellow-50 text-yellow-600 border-b-2 border-yellow-500 dark:bg-white/10 dark:text-yellow-500' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Zap size={12} /> System Logs</button>
                <button onClick={() => setActivePanel('properties')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'properties' ? 'bg-green-50 text-green-600 border-b-2 border-green-500 dark:bg-white/10 dark:text-green-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Shapes size={12} /> Properties</button>
-               {/* NEW AI TAB BUTTON */}
                <button onClick={() => setActivePanel('ai')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'ai' ? 'bg-pink-50 text-pink-600 border-b-2 border-pink-500 dark:bg-white/10 dark:text-pink-400' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Sparkles size={12} /> AI ASSISTANT</button>
             </div>
             <div className="flex-1 overflow-y-auto font-mono text-[10px] p-0">
-               {/* AI ASSISTANT PANEL */}
                {activePanel === 'ai' && (
                    <div className="p-4 flex flex-col h-full">
                        {proposedCode ? (
@@ -758,7 +841,6 @@ const handleAiGenerate = async () => {
                        )}
                    </div>
                )}
-               {/* LOGS PANEL */}
                {activePanel === 'logs' && (
                   <div className="p-4 space-y-2">
                      {aiLog.map((log, i) => (
@@ -772,7 +854,6 @@ const handleAiGenerate = async () => {
                      ))}
                   </div>
                )}
-               {/* PROPERTIES PANEL */}
                {activePanel === 'properties' && (
                   <div className="p-2 space-y-1">
                      {bubbles.length === 0 ? (
@@ -825,12 +906,6 @@ const handleAiGenerate = async () => {
                                         <span className="font-mono ml-2">{b.meta?.color}</span>
                                       </div>
                                    </div>
-                                     <div className="flex items-center justify-between mt-1">
-                                        <div className="flex items-center gap-1"><span className="text-[10px]">Font-size</span></div>
-                                        <div className="flex items-center gap-2">
-                                          <input type="number" value={b.meta?.fontSize ? parseInt(b.meta.fontSize) : ''} onChange={(e) => handleStyleChange(b.id, 'fontSize', `${e.target.value}px`)} className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]" />
-                                        </div>
-                                     </div>
                                 </div>
                               )}
                            </div>
