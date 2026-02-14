@@ -581,7 +581,38 @@ const handleAiGenerate = async () => {
     return () => { window.removeEventListener('mousemove', handleGlobalMove); window.removeEventListener('mouseup', handleGlobalUp); };
   }, [extractedGhost, rightPanelWidth, bubbles, clicksData]);
 
-  useEffect(() => { const handleMove = (e) => { if (isResizing) setRightPanelWidth(window.innerWidth - e.clientX); }; const handleUp = () => setIsResizing(false); if (isResizing) { window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleUp); } return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); }; }, [isResizing]);
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (isResizing) {
+        // Calculate new width relative to the window edge
+        const newWidth = window.innerWidth - e.clientX;
+        // Optional: Add min/max constraints to prevent breaking the layout
+        const clampedWidth = Math.max(300, Math.min(newWidth, window.innerWidth - 100));
+        setRightPanelWidth(clampedWidth);
+      }
+    };
+    
+    const handleUp = () => {
+      setIsResizing(false);
+      // Re-enable pointer events on iframes when done
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+      // Vital: Disable selection so text doesn't highlight while dragging
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isResizing]);
+
   const handleClearEnvironment = () => { setTotalUsers(0); setBubbles([]); };
 
   return (
@@ -649,6 +680,13 @@ const handleAiGenerate = async () => {
            <div className="flex flex-col h-full bg-white dark:bg-[#1e1e1e]">
               <div className="h-10 flex items-center justify-between px-4 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-black/20"><span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2"><Globe size={12}/> Live Preview</span><div className={`text-[10px] px-2 rounded flex items-center gap-1 ${demoMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400'}`}>{demoMode ? 'EDIT MODE' : 'EXTRACT MODE'}</div></div>
               <div className="flex-1 bg-white relative">
+
+                 {/* --- THE FIX: Invisible Shield --- */}
+                 {/* This covers the iframe ONLY when resizing, keeping mouse events in the parent */}
+                 {isResizing && (
+                    <div className="absolute inset-0 z-50 bg-transparent" />
+                 )}
+
                  <IframeRenderer 
                     code={proposedCode || fileContents['src/App.jsx'] || ''}  // PREVIEW PROPOSED CODE IF AVAILABLE
                     onUpdateCode={handleCodeUpdateFromPreview} 
