@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit, Sparkles, Check, MessageSquare } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit, Sparkles, Check, History, MessageSquare } from 'lucide-react';
 import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
+import HistoryPanel from './HistoryPanel';
 import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, BACKEND_PORT, PORT} from "../constants";
 import { parse } from 'postcss';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 
-// --- 1. RUNTIME RENDERER (Fixed) ---
-// --- 1. RUNTIME RENDERER (Fixed) ---
+// --- 1. RUNTIME RENDERER ---
 const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
 
@@ -75,7 +75,6 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
     return { x, y, style: styleObject };
   }
 
-  // --- UPDATED REGEX LIST TO INCLUDE SEMANTIC TAGS ---
   const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
 
   useEffect(() => {
@@ -160,10 +159,8 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
   const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8" /><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><style>body { margin: 0; overflow: hidden; background: #fff; user-select: none; } .mode-edit .darwin-draggable { cursor: move; } .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; } .mode-live .darwin-draggable { cursor: grab; } .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; cursor: alias; }</style></head><body class="mode-${mode}"><div id="root"></div><script type="text/babel">
   const { useState, useEffect, useRef } = React; 
   
-  // --- RESTORED HELPER COMPONENT ---
+  // --- MOCKS ---
   const DarwinTracker = () => null;
-
-  // --- MOCKS FOR MISSING IMPORTS ---
   const Github = (p) => <span {...p}>GH</span>;
   const LogOut = (p) => <span {...p}>LogOut</span>;
   const Command = (p) => <span {...p}>Cmd</span>;
@@ -202,10 +199,26 @@ const IframeRenderer = ({ code, onUpdateCode, handleUpdateLayout, mode, onExtrac
     const activeStyle = highlightColor ? { outline: '2px solid ' + highlightColor, boxShadow: '0 0 15px ' + highlightColor + ', inset 0 0 10px ' + highlightColor, zIndex: 9999, position: isAbsolute ? 'absolute' : 'relative', transition: 'all 0.2s ease' } : {};
     return <Tag style={{ ...style, ...activeStyle, left: pos.x, top: pos.y }} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
   }; 
-  try { ${prepareTransformedCode()} const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />); } catch (err) { document.body.innerHTML = '<div style="color:red; padding:20px">Preview Error: ' + err.message + '</div>'; } </script></body></html>`;
+  
+  try { 
+    ${prepareTransformedCode()} 
+    const root = ReactDOM.createRoot(document.getElementById('root')); 
+    root.render(<App />); 
+  } catch (err) { 
+    document.body.innerHTML = \`
+      <div style="background-color: #09090b; color: #71717a; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; text-align: center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
+          <path d="m19 5-3 3"/><path d="m2 22 3-3"/><path d="M6.3 20.3a3 3 0 0 0 4.2 0l1.6-1.6a2 2 0 0 0 0-2.8l-2.1-2.1a2 2 0 0 0-2.8 0l-1.6 1.6a3 3 0 0 0 0 4.2Z"/><path d="M14.1 12.9a2 2 0 0 0 0-2.8l-2.1-2.1a2 2 0 0 0-2.8 0l-1.6 1.6"/><path d="m15 15 2-2"/><path d="M22 2 2 22"/>
+        </svg>
+        <h3 style="margin: 0 0 8px; font-weight: 600; color: #e4e4e7;">Preview Unavailable</h3>
+        <p style="margin: 0; font-size: 14px; max-width: 300px; line-height: 1.5;">\$\{err.message\}</p>
+      </div>
+    \`; 
+  } 
+  </script></body></html>`;
+
   return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin" />;
 };
-
 // --- 2. EDITOR UTILS (Unchanged) ---
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
 
@@ -623,6 +636,7 @@ const handleAiGenerate = async () => {
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue bg-blue-50 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-500 bg-yellow-50 dark:text-yellow-400 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><BarChart2 size={20} /></button>
             <button onClick={() => setViewMode('code')} className={`p-3 rounded-xl transition-all ${viewMode === 'code' ? 'text-purple-600 bg-purple-50 dark:text-neon-purple dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Code size={20} /></button>
+            <button onClick={() => setViewMode('history')} className={`p-3 rounded-xl transition-all ${viewMode === 'history' ? 'text-orange-500 bg-orange-50 dark:text-orange-500 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><History size={20} /></button>
             {/* NEW AI ICON */}
             <button onClick={() => setActivePanel('ai')} className={`p-3 rounded-xl transition-all ${activePanel === 'ai' ? 'text-pink-600 bg-pink-50 dark:text-pink-400 dark:bg-pink-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Sparkles size={20} /></button>
             <button onClick={() => setActivePanel('properties')} className={`p-3 rounded-xl transition-all ${activePanel === 'properties' ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-500/10' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Shapes size={20} /></button>
@@ -655,6 +669,8 @@ const handleAiGenerate = async () => {
           </div>
         ) : viewMode === 'analytics' ? (
           <AnalyticsPanel rawUsers={rawUsers} clicksData={clicksData} />
+        ) : viewMode === 'history' ? (    
+          <HistoryPanel repo={repo} token={token} />
         ) : (
           <EditorWorkspace 
             fileTree={fileTree} 
