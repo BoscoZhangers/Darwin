@@ -122,97 +122,137 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
 };
 
 // --- The Unified Swarm Controller ---
-export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs }) {
+export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs, rawUsers = {}, demoMode = true }) {
   const [agents, setAgents] = useState([]);
 
   useEffect(() => {
     setAgents(currentAgents => {
         let newPool = [...currentAgents];
 
-        // 1. DOWNSCALE LOGIC (The Fix)
-        // If we have more agents than the new capacity (e.g. going from Demo -> Live), remove them.
-        if (newPool.length > capacity) {
-            // Prioritize keeping agents that are already assigned to a bubble
-            const assigned = newPool.filter(a => a.assignedTo !== null);
-            const unassigned = newPool.filter(a => a.assignedTo === null);
+        if (demoMode) {
+            // --- DEMO MODE: SIMULATED CROWD BASED ON COUNTS ---
             
-            // Rebuild pool: Keep assigned first, then fill remainder with unassigned up to capacity
-            const keepCount = capacity;
-            if (assigned.length >= keepCount) {
-                newPool = assigned.slice(0, keepCount);
-            } else {
-                const spaceLeft = keepCount - assigned.length;
-                newPool = [...assigned, ...unassigned.slice(0, spaceLeft)];
+            // 1. DOWNSCALE LOGIC
+            if (newPool.length > capacity) {
+                const assigned = newPool.filter(a => a.assignedTo !== null);
+                const unassigned = newPool.filter(a => a.assignedTo === null);
+                const keepCount = capacity;
+                if (assigned.length >= keepCount) {
+                    newPool = assigned.slice(0, keepCount);
+                } else {
+                    const spaceLeft = keepCount - assigned.length;
+                    newPool = [...assigned, ...unassigned.slice(0, spaceLeft)];
+                }
             }
-        }
 
-        // 2. UPSCALE LOGIC
-        // If we need more agents (e.g. going from Live -> Demo)
-        if (newPool.length < capacity) {
-            const deficit = capacity - newPool.length;
-            for(let i=0; i<deficit; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const radius = 30 + Math.random() * 20;
-                newPool.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    startPos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
-                    assignedTo: null,
-                    color: '#444444', 
-                    speedOffset: Math.random(),
-                });
+            // 2. UPSCALE LOGIC
+            if (newPool.length < capacity) {
+                const deficit = capacity - newPool.length;
+                for(let i=0; i<deficit; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 30 + Math.random() * 20;
+                    newPool.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        startPos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+                        assignedTo: null,
+                        color: '#444444', 
+                        speedOffset: Math.random(),
+                    });
+                }
             }
-        }
 
-        // --- 3. CLEANUP ORPHANED AGENTS ---
-        const activeBubbleIds = new Set(bubbles.map(b => b.id));
-        newPool.forEach(agent => {
-            if (agent.assignedTo && !activeBubbleIds.has(agent.assignedTo)) {
-                agent.assignedTo = null;
-                agent.color = '#444444';
-            }
-        });
+            // 3. CLEANUP ORPHANED AGENTS
+            const activeBubbleIds = new Set(bubbles.map(b => b.id));
+            newPool.forEach(agent => {
+                if (agent.assignedTo && !activeBubbleIds.has(agent.assignedTo)) {
+                    agent.assignedTo = null;
+                    agent.color = '#444444';
+                }
+            });
 
-        // --- 4. ASSIGNMENT LOGIC ---
-        bubbles.forEach(bubble => {
-            const targetCount = bubble.count || 0;
-            const assignedAgents = newPool.filter(a => a.assignedTo === bubble.id);
+            // 4. ASSIGNMENT LOGIC
+            bubbles.forEach(bubble => {
+                const targetCount = bubble.count || 0;
+                const assignedAgents = newPool.filter(a => a.assignedTo === bubble.id);
+                
+                if (assignedAgents.length < targetCount) {
+                    // Recruit Wanderers
+                    const needed = targetCount - assignedAgents.length;
+                    let recruitsFound = 0;
+                    for (let i = 0; i < newPool.length && recruitsFound < needed; i++) {
+                        if (newPool[i].assignedTo === null) {
+                            newPool[i].assignedTo = bubble.id;
+                            newPool[i].color = bubble.color || 'blue';
+                            recruitsFound++;
+                        }
+                    }
+                } else if (assignedAgents.length > targetCount) {
+                    // Release Surplus
+                    const excess = assignedAgents.length - targetCount;
+                    let released = 0;
+                    for (let i = 0; i < newPool.length && released < excess; i++) {
+                        if (newPool[i].assignedTo === bubble.id) {
+                            newPool[i].assignedTo = null;
+                            newPool[i].color = '#444444'; 
+                            released++;
+                        }
+                    }
+                } else {
+                     // Sync Colors
+                     assignedAgents.forEach(agent => {
+                        const agentIndex = newPool.findIndex(a => a.id === agent.id);
+                        if(agentIndex !== -1) {
+                            newPool[agentIndex].color = bubble.color;
+                        }
+                     });
+                }
+            });
+
+        } else {
+            // --- LIVE MODE: REAL USER TRACKING ---
+            const activeSessionIds = Object.keys(rawUsers);
             
-            if (assignedAgents.length < targetCount) {
-                // Recruit Wanderers
-                const needed = targetCount - assignedAgents.length;
-                let recruitsFound = 0;
-                for (let i = 0; i < newPool.length && recruitsFound < needed; i++) {
-                    if (newPool[i].assignedTo === null) {
-                        newPool[i].assignedTo = bubble.id;
-                        newPool[i].color = bubble.color || 'blue';
-                        recruitsFound++;
-                    }
+            // 1. SYNC AGENTS WITH ACTIVE SESSIONS
+            // Remove agents not in activeSessionIds
+            newPool = newPool.filter(a => activeSessionIds.includes(a.id));
+            
+            // Add agents for new activeSessionIds
+            activeSessionIds.forEach(sessionId => {
+                if (!newPool.find(a => a.id === sessionId)) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 30 + Math.random() * 20;
+                    newPool.push({
+                        id: sessionId, // Use actual session ID as Agent ID
+                        startPos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+                        assignedTo: null,
+                        color: '#444444', 
+                        speedOffset: Math.random(),
+                    });
                 }
-            } else if (assignedAgents.length > targetCount) {
-                // Release Surplus
-                const excess = assignedAgents.length - targetCount;
-                let released = 0;
-                for (let i = 0; i < newPool.length && released < excess; i++) {
-                    if (newPool[i].assignedTo === bubble.id) {
-                        newPool[i].assignedTo = null;
-                        newPool[i].color = '#444444'; 
-                        released++;
-                    }
+            });
+
+            // 2. UPDATE ASSIGNMENTS BASED ON TARGETS FROM RAWUSERS
+            newPool.forEach(agent => {
+                const sessionData = rawUsers[agent.id];
+                const targetId = sessionData?.target;
+
+                // Find if this targetId corresponds to a currently visible bubble
+                const targetBubble = bubbles.find(b => b.id === targetId || b.label === targetId);
+                
+                if (targetBubble && targetBubble.visible) {
+                    agent.assignedTo = targetBubble.id;
+                    agent.color = targetBubble.color;
+                } else {
+                    // Wander as grey if no target or target is not tracked
+                    agent.assignedTo = null;
+                    agent.color = '#444444';
                 }
-            } else {
-                 // Sync Colors
-                 assignedAgents.forEach(agent => {
-                    const agentIndex = newPool.findIndex(a => a.id === agent.id);
-                    if(agentIndex !== -1) {
-                        newPool[agentIndex].color = bubble.color;
-                    }
-                 });
-            }
-        });
+            });
+        }
 
         return [...newPool];
     });
-  }, [bubbles, capacity]);
+  }, [bubbles, capacity, rawUsers, demoMode]); 
 
   return (
     <group>

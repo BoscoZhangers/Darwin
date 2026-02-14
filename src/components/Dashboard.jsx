@@ -181,6 +181,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         set: (ref, value) => ref.set(value),
         push: (ref, value) => ref.push(value),
         update: (ref, value) => ref.update(value),
+        remove: (ref) => ref.remove(), // <--- ADDED THIS LINE
         onDisconnect: (ref) => ref.onDisconnect(),
         increment: (val) => firebase.database.ServerValue.increment(val)
       }
@@ -495,8 +496,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
         if (bubbles.length > 0) {
             fetchModelPredictions(bubbles);
         }
-        // 2. Ensure totalUsers is distinct (The Scene uses hardcoded 50, but we can set it here too if needed)
-        // setTotalUsers(50); 
     } else {
         // --- LIVE MODE (FIREBASE) ---
         if (!repo) return;
@@ -739,7 +738,15 @@ const handleAiGenerate = async () => {
       <div className="flex-1 relative bg-gray-200 dark:bg-[#0a0a0a] overflow-hidden flex flex-col transition-colors duration-300">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
-             <Scene bubbles={bubbles} userCount={demoMode ? 50 : totalUsers} activeId={activeId} setActiveId={setActiveId} darkMode={darkMode} />
+             <Scene 
+                bubbles={bubbles} 
+                userCount={demoMode ? 50 : totalUsers} 
+                activeId={activeId} 
+                setActiveId={setActiveId} 
+                darkMode={darkMode} 
+                rawUsers={rawUsers} 
+                demoMode={demoMode}
+             />
              {extractedGhost && (<div className="absolute inset-0 bg-blue-500/10 border-4 border-blue-500/50 flex items-center justify-center pointer-events-none z-10"><div className="bg-black/80 px-4 py-2 rounded text-blue-400 font-mono font-bold">DROP TO TRACK</div></div>)}
              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
                 <div className="bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 pl-6 pr-2 py-2 rounded-full flex items-center gap-6 shadow-2xl transition-colors">

@@ -99,7 +99,7 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
   );
 };
 
-export default function Scene({ bubbles, userCount, activeId, setActiveId, darkMode = true }) {
+export default function Scene({ bubbles, userCount, activeId, setActiveId, darkMode = true, rawUsers, userTargets, demoMode }) {
   const bgColor = darkMode ? '#000000' : '#ffffff'; 
   const gridSection = darkMode ? '#00f3ff' : '#cbd5e1'; 
   const gridCell = darkMode ? '#bc13fe' : '#e2e8f0'; 
@@ -132,7 +132,10 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
         <Crowd 
           bubbles={bubbles} 
           capacity={userCount || 50} 
-          bubbleRefs={bubbleRefs} // Pass the hotline
+          bubbleRefs={bubbleRefs} 
+          rawUsers={rawUsers}
+          userTargets={userTargets}
+          demoMode={demoMode}
         />
 
         {bubbles.map((b) => {
