@@ -46,14 +46,13 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
   useEffect(() => {
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
-      // --- UPDATE: Pass the filename up to the handler ---
       if (e.data.type === 'UPDATE_POS') {
           handleUpdateLayout(
               e.data.dataDarwinId || e.data.index, 
               e.data.x, 
               e.data.y, 
               null, 
-              e.data.file // <--- CRITICAL: Pass the source file
+              e.data.file 
           );
       }
       if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
@@ -73,7 +72,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
     return JSON.stringify(effectiveFiles);
   };
 
-  // --- IFRAME SCRIPT ---
   const srcDoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -116,7 +114,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         let idx = 0;
         return code.replace(new RegExp('<(' + TAGS + ')\\\\b([^>]*)>', 'g'), (match, tag, props) => {
              const currentIndex = idx++;
-             // INJECT FILENAME so the element knows where it came from
              return \`<InteractiveElement _tag="\${tag}" _darwinIndex={\${currentIndex}} _darwinFile="\${filename}" \${props}>\`;
         }).replace(new RegExp('<\\\\/(' + TAGS + ')>', 'g'), '</InteractiveElement>');
       } catch(e) { return code; }
@@ -165,8 +162,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
             const parent = elem.offsetParent || document.body;
             const parentRect = parent.getBoundingClientRect();
             
-            // If element is static, rect.left is viewport X. 
-            // If parent is static body, parentRect.left is usually 0.
             const relX = rect.left - parentRect.left;
             const relY = rect.top - parentRect.top;
             
@@ -191,7 +186,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         
         const handleUp = () => { 
           setIsDragging(false); 
-          // SEND FILE PATH HERE
           window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: pos.x, y: pos.y, file: _darwinFile }, '*'); 
         }; 
 
@@ -210,22 +204,16 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
     };
 
-    // --- RESTORED EXTERNALS (with React 18 fix + Firebase) ---
     const EXTERNALS = { 
       'react': React, 
       'react-dom': ReactDOM, 
-      // Fix for React 18 createRoot error
       'react-dom/client': { ...ReactDOM, default: ReactDOM, createRoot: ReactDOM.createRoot },
-      
-      // Fix for Lucide Icons
       'lucide-react': new Proxy({}, { 
           get: (target, prop) => (props) => React.createElement('svg', { ...props, viewBox: "0 0 24 24", width: 24, height: 24, fill: "none", stroke: "currentColor", strokeWidth: 2, style: { ...props.style, opacity: 0.5 } }, 
             React.createElement('circle', { cx: 12, cy: 12, r: 10 }), 
             React.createElement('path', { d: "M12 8v8M8 12h8" })
           ) 
       }),
-
-      // Fix for Firebase
       'firebase/app': {
         initializeApp: (config) => {
           if (!window.firebase) throw new Error("Firebase SDK not loaded.");
@@ -567,8 +555,9 @@ export default function Dashboard({ user, token, repo, onBack }) {
         const code = prev[filePath];
         if (!code) return prev; 
 
-        // Regex searches for the tag containing the data-darwin-id
-        const regex = new RegExp(`(<[^>]*\\bdata-darwin-id=["']${id}["'][^>]*>)`, 'g');
+        // --- NEW FIX: TOLERANT REGEX FOR ARROW FUNCTIONS => ---
+        // Matches the tag start, the ID, and ignores '>' if they are part of '=>'
+        const regex = new RegExp(`(<(?:[^>]|=>)*\\bdata-darwin-id=["']${id}["'](?:[^>]|=>)*>)`, 'g');
 
         const newCode = code.replace(regex, (matchTag) => {
              if (matchTag.match(/style={{/)) {
@@ -576,7 +565,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                      let updatedStyle = innerStyle;
                      
                      const setStyle = (prop, val) => {
-                        // --- FIX: Regex now allows decimals (e.g. 10.5) and quoted strings ---
+                        // Regex allows decimals and quotes
                         const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
                         if (propRegex.test(updatedStyle)) {
                            updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
@@ -594,8 +583,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
                  });
              } else {
                  const styleString = ` style={{ position: 'absolute', left: '${newX}px', top: '${newY}px' }}`;
-                 if (matchTag.includes('/>')) return matchTag.replace('/>', `${styleString} />`);
-                 return matchTag.replace('>', `${styleString}>`);
+                 
+                 // --- NEW FIX: SAFE INJECTION AT END OF TAG ---
+                 // Instead of searching for the first '>', we use regex anchors to find the true end
+                 if (matchTag.trim().endsWith('/>')) {
+                     return matchTag.replace(/\/>$/, `${styleString} />`);
+                 } else {
+                     return matchTag.replace(/>$/, `${styleString}>`);
+                 }
              }
         });
 
