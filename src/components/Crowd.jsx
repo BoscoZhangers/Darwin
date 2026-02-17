@@ -1,4 +1,3 @@
-// src/components/Crowd.jsx
 import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Quaternion, Euler, Color, MeshStandardMaterial } from 'three';
@@ -65,32 +64,41 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
             target.copy(current);
         }
 
-        // Apply Offset
-        const angle = index * 0.5;
-        const radius = 1.5 + (index % 3);
+        // --- TIGHT SPIRAL PACKING (No Overlap) ---
+        const SPACING = 0.6; 
+        const angle = index * 2.39996; // Golden Angle
+        const radius = SPACING * Math.sqrt(index); 
+
         target.x += Math.cos(angle) * radius;
         target.z += Math.sin(angle) * radius;
     }
 
-    // --- 2. MOVEMENT LOGIC ---
+    // --- 2. MOVEMENT LOGIC (WITH SNAP) ---
     const distToTarget = current.distanceTo(target);
-    
-    // STOPPING RADIUS
-    const stopRadius = isWandering ? 0.5 : 0.2; 
-    const isMoving = distToTarget > stopRadius;
+    const stopThreshold = 0.1; 
+    let isMoving = false;
 
-    if (isMoving) {
-      const moveVector = target.clone().sub(current).normalize().multiplyScalar(speed);
-      group.current.position.add(moveVector);
+    if (distToTarget > stopThreshold) {
+        // Move towards target
+        const moveVector = target.clone().sub(current).normalize().multiplyScalar(speed);
+        group.current.position.add(moveVector);
+        isMoving = true;
+    } else {
+        // Snap to exact position
+        if (!isWandering) {
+            group.current.position.lerp(target, 0.2); 
+        }
+        isMoving = false; 
     }
 
     // --- 3. ROTATION & ANIMATION ---
     if (isMoving) {
-        // RUNNING ANIMATION
+        // Face the target
         const angle = Math.atan2(target.x - current.x, target.z - current.z);
         const q = new Quaternion().setFromEuler(new Euler(0, angle, 0));
         group.current.quaternion.slerp(q, 0.1);
         
+        // Run Animation (Limbs moving, Body bobbing)
         const t = state.clock.elapsedTime * 15 + speedOffset * 10;
         if(leftArm.current) leftArm.current.rotation.x = Math.sin(t) * 0.6;
         if(rightArm.current) rightArm.current.rotation.x = -Math.sin(t) * 0.6;
@@ -98,8 +106,11 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
         if(rightLeg.current) rightLeg.current.rotation.x = Math.sin(t) * 0.8;
         group.current.position.y = Math.abs(Math.sin(t)) * 0.1;
     } else {
-        // IDLE ANIMATION
-        group.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.02;
+        // --- STOPPED (Fixed in Place) ---
+        // 1. Reset Height (No bobbing)
+        group.current.position.y = 0;
+        
+        // 2. Reset Limbs to Neutral
         if(leftLeg.current) leftLeg.current.rotation.x = 0;
         if(rightLeg.current) rightLeg.current.rotation.x = 0;
         if(leftArm.current) leftArm.current.rotation.x = 0; 
