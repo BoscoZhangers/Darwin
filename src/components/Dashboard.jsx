@@ -46,15 +46,14 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
   useEffect(() => {
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
-      
-      // Update Position: Pass file path up to parent
+      // --- UPDATE: Pass the filename up to the handler ---
       if (e.data.type === 'UPDATE_POS') {
           handleUpdateLayout(
               e.data.dataDarwinId || e.data.index, 
               e.data.x, 
               e.data.y, 
               null, 
-              e.data.file 
+              e.data.file // <--- CRITICAL: Pass the source file
           );
       }
       if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
@@ -74,6 +73,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
     return JSON.stringify(effectiveFiles);
   };
 
+  // --- IFRAME SCRIPT ---
   const srcDoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -116,6 +116,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         let idx = 0;
         return code.replace(new RegExp('<(' + TAGS + ')\\\\b([^>]*)>', 'g'), (match, tag, props) => {
              const currentIndex = idx++;
+             // INJECT FILENAME so the element knows where it came from
              return \`<InteractiveElement _tag="\${tag}" _darwinIndex={\${currentIndex}} _darwinFile="\${filename}" \${props}>\`;
         }).replace(new RegExp('<\\\\/(' + TAGS + ')>', 'g'), '</InteractiveElement>');
       } catch(e) { return code; }
@@ -190,6 +191,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         
         const handleUp = () => { 
           setIsDragging(false); 
+          // SEND FILE PATH HERE
           window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: pos.x, y: pos.y, file: _darwinFile }, '*'); 
         }; 
 
@@ -208,7 +210,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
     };
 
-    // --- RESTORED EXTERNALS ---
+    // --- RESTORED EXTERNALS (with React 18 fix + Firebase) ---
     const EXTERNALS = { 
       'react': React, 
       'react-dom': ReactDOM, 
@@ -574,7 +576,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
                      let updatedStyle = innerStyle;
                      
                      const setStyle = (prop, val) => {
-                        const propRegex = new RegExp(`${prop}\\s*:\\s*['"\\d\\w]+`);
+                        // --- FIX: Regex now allows decimals (e.g. 10.5) and quoted strings ---
+                        const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
                         if (propRegex.test(updatedStyle)) {
                            updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
                         } else {
