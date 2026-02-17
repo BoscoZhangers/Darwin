@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Github, Command, Sparkles } from 'lucide-react'; 
-import { Canvas, useFrame, extend } from '@react-three/fiber';
-import { OrbitControls, Stars, Environment } from '@react-three/drei';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import { Github, Command, Sparkles, Dna } from 'lucide-react'; 
+import { Canvas, useFrame, extend, useThree } from '@react-three/fiber';
+import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { subscribeToAuth, signInWithGithub, signOut } from './lib/firebase';
 import Dashboard from './components/Dashboard';
@@ -13,36 +13,77 @@ extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
 
 // --- 3D Components ---
 
-const HelperRung = ({ start, end, color }) => {
+// 1. INFINITE ZOOM OUT RIG
+const CameraRig = () => {
+  const { camera } = useThree();
+  const START_Z = 12; 
+  const DISTANCE = 30; 
+  const SPEED = 2.5; 
+
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    const movement = (t * SPEED) % DISTANCE;
+    camera.position.z = START_Z + movement;
+  });
+
+  return null;
+};
+
+const HelperRung = ({ start, end }) => {
     const curve = useMemo(() => new THREE.LineCurve3(start, end), [start, end]);
+    const geomRef = useRef();
+
+    useLayoutEffect(() => {
+      if (geomRef.current) {
+        const geom = geomRef.current;
+        const count = geom.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        
+        // RESTORED: Bright Cyan/Purple Colors
+        const colorStart = new THREE.Color("#22D3EE"); 
+        const colorEnd = new THREE.Color("#A855F7");   
+        const tempColor = new THREE.Color();
+
+        const uvs = geom.attributes.uv;
+
+        for (let i = 0; i < count; i++) {
+          const t = uvs.getX(i);
+          tempColor.copy(colorStart).lerp(colorEnd, t);
+          colors[i * 3] = tempColor.r;
+          colors[i * 3 + 1] = tempColor.g;
+          colors[i * 3 + 2] = tempColor.b;
+        }
+
+        geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+    }, [curve]);
+
     return (
       <mesh>
-        <tubeGeometry args={[curve, 1, 0.2, 8, false]} />
+        <tubeGeometry ref={geomRef} args={[curve, 8, 0.08, 4, false]} /> 
         <meshPhysicalMaterial 
              transparent
-             opacity={0.3}
-             roughness={0.1}
-             metalness={0.9}
-             color={color}
-             emissive={color}
-             emissiveIntensity={0.2}
+             opacity={0.6} // RESTORED: Visibility
+             roughness={0.2}
+             metalness={0.8}
+             vertexColors={true}
+             emissiveIntensity={0.3} // RESTORED: Glow
         />
       </mesh>
     );
 }
 
 function SolidDNAHelix() {
-  const groupRef = useRef();
+  const spinRef = useRef(); 
   const STRAND_RADIUS = 0.6;
   const HELIX_RADIUS = 4;
-  const HEIGHT = 25;
-  const TURNS = 3;
+  const HEIGHT = 60; 
+  const TURNS = 6; 
   const POINTS_PER_TURN = 30;
 
-  // Procedurally generate curves and rung positions
   const { curveA, curveB, rungs } = useMemo(() => {
-    const pointsA = [];
-    const pointsB = [];
+    const pA = [];
+    const pB = [];
     const rungData = [];
     const totalPoints = TURNS * POINTS_PER_TURN;
 
@@ -51,72 +92,67 @@ function SolidDNAHelix() {
       const angle = t * Math.PI * 2 * TURNS;
       const y = (t - 0.5) * HEIGHT;
 
-      // Calculate positions for Strand A and B on opposite sides
       const vecA = new THREE.Vector3(Math.cos(angle) * HELIX_RADIUS, y, Math.sin(angle) * HELIX_RADIUS);
       const vecB = new THREE.Vector3(Math.cos(angle + Math.PI) * HELIX_RADIUS, y, Math.sin(angle + Math.PI) * HELIX_RADIUS);
 
-      pointsA.push(vecA);
-      pointsB.push(vecB);
+      pA.push(vecA);
+      pB.push(vecB);
 
-      // Add rungs periodically
-      if (i % 6 === 0 && i > 0 && i < totalPoints) {
+      if (i % 3 === 0 && i > 0 && i < totalPoints) {
          rungData.push({ start: vecA, end: vecB });
       }
     }
 
     return {
-      curveA: new THREE.CatmullRomCurve3(pointsA),
-      curveB: new THREE.CatmullRomCurve3(pointsB),
-      rungs: rungData
+      curveA: new THREE.CatmullRomCurve3(pA),
+      curveB: new THREE.CatmullRomCurve3(pB),
+      rungs: rungData,
     };
   }, []);
 
-  // Animate rotation
   useFrame((state, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.15; // Slow spin
-      groupRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.2) * 0.1; // Slight wobble
+    if (spinRef.current) {
+      spinRef.current.rotation.y += delta * 0.4; 
     }
   });
 
-  // Shared material props for that "glassy/tech" look
+  // RESTORED: Bright Material Props (to be seen through overlay)
   const materialProps = {
       transparent: true,
-      opacity: 0.5,        // Semi-transparent
-      roughness: 0.05,     // Very smooth
-      metalness: 0.9,      // Metallic reflection
-      clearcoat: 1,        // Shiny top layer
+      opacity: 0.8,        
+      roughness: 0.1,     
+      metalness: 0.9,      
+      clearcoat: 1,        
       clearcoatRoughness: 0.1,
-      transmission: 0.2,   // Slight glass refraction effect
+      transmission: 0.1,   
   };
 
   return (
-    <group ref={groupRef} rotation={[0.3, 0, 0]}> {/* Tilted slightly */}
-      {/* Strand 1 (Cyan/Blue theme) */}
+    <group ref={spinRef}>
+      {/* Strand 1 Tube - RESTORED Cyan Glow */}
       <mesh>
-        <tubeGeometry args={[curveA, 200, STRAND_RADIUS, 16, false]} />
+        <tubeGeometry args={[curveA, 300, STRAND_RADIUS, 12, false]} />
         <meshPhysicalMaterial 
-          {...materialProps}
-          color="#22D3EE"
-          emissive="#0ea5e9"
-          emissiveIntensity={0.5}
+          {...materialProps} 
+          color="#22D3EE" 
+          emissive="#0ea5e9" 
+          emissiveIntensity={0.6} 
         />
       </mesh>
 
-      {/* Strand 2 (Purple/Pink theme) */}
+      {/* Strand 2 Tube - RESTORED Purple Glow */}
       <mesh>
-        <tubeGeometry args={[curveB, 200, STRAND_RADIUS, 16, false]} />
+        <tubeGeometry args={[curveB, 300, STRAND_RADIUS, 12, false]} />
         <meshPhysicalMaterial 
-            {...materialProps}
-            color="#A855F7"
-            emissive="#d946ef"
-            emissiveIntensity={0.5}
+          {...materialProps} 
+          color="#A855F7" 
+          emissive="#d946ef" 
+          emissiveIntensity={0.6} 
         />
       </mesh>
 
-      {/* Connecting Rungs */}
       {rungs.map((rung, i) => (
-          <HelperRung key={i} start={rung.start} end={rung.end} color={i % 2 === 0 ? "#22D3EE" : "#A855F7"} />
+          <HelperRung key={i} start={rung.start} end={rung.end} />
       ))}
     </group>
   );
@@ -125,32 +161,30 @@ function SolidDNAHelix() {
 function SceneBackground() {
   return (
     <div className="absolute inset-0 z-0 transition-opacity duration-1000 ease-in-out">
-      <Canvas camera={{ position: [0, 0, 20], fov: 35 }} gl={{ antialias: true }}>
-        <color attach="background" args={['#050505']} />
-        {/* Lighting needed for physical materials to look good */}
+      <Canvas camera={{ position: [0, 0, 12], fov: 35 }} gl={{ antialias: true }}>
+        <color attach="background" args={['#050505']} /> 
+        
         <ambientLight intensity={0.2} />
         <spotLight position={[10, 10, 10]} angle={0.3} penumbra={1} intensity={1} castShadow />
         <pointLight position={[-10, -10, -10]} intensity={0.5} color="#A855F7" />
         
-        {/* Environment adds reflections to the metallic/glass surfaces */}
         <Environment preset="city" />
-        <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
         
-        <SolidDNAHelix />
-
-        <OrbitControls 
-          enablePan={false} 
-          enableZoom={true} 
-          minDistance={10} 
-          maxDistance={40}
-          autoRotate={false}
-          enableDamping={true}
-          dampingFactor={0.05}
-        />
+        {/* Stars REMOVED to avoid white dots/distraction */}
         
-        {/* Optional: subtle fog to blend distances */}
-        <fog attach="fog" args={['#050505', 20, 50]} />
+        {/* Slant Group */}
+        <group rotation={[0, 0, -Math.PI / 8]}> 
+            <SolidDNAHelix />
+        </group>
+        
+        <CameraRig />
+        
+        <fog attach="fog" args={['#050505', 20, 60]} />
       </Canvas>
+      
+      {/* --- THE DARK OVERLAY --- */}
+      {/* This sits on top of the Canvas but behind the main content (z-0 inside z-0 container) */}
+      <div className="absolute inset-0 bg-black/70 pointer-events-none"></div>
     </div>
   );
 }
@@ -215,14 +249,11 @@ export default function App() {
 
   if (!user) {
     return (
-      // Removed bg-[#050505] here as the Canvas handles the background color now
       <div className="h-screen w-screen text-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-purple-500/30">
         
         {/* --- 3D Background Layer --- */}
         <SceneBackground />
-         {/* Optional Overlay to ensure text readability if 3D gets too bright */}
         <div className="absolute inset-0 bg-black/20 z-5 pointer-events-none"></div>
-
 
         {/* --- Styles for UI --- */}
         <style>
@@ -259,7 +290,7 @@ export default function App() {
           `}
         </style>
 
-        {/* --- Foreground UI (Z-Index 10 ensures it's above the canvas) --- */}
+        {/* --- Foreground UI --- */}
         <div className="z-10 flex flex-col items-center gap-8 pointer-events-none select-none">
           <div className="relative group cursor-default pointer-events-auto">
             {/* Pulsing Outer Glow */}
@@ -268,8 +299,18 @@ export default function App() {
             {/* Static Sharp Inner Glow */}
             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400 to-purple-600 rounded-2xl blur-md opacity-80"></div>
 
+            {/* Logo Container */}
             <div className="relative w-24 h-24 bg-[#111] rounded-2xl flex items-center justify-center border border-white/20 shadow-2xl">
-              <span className="text-5xl font-bold bg-gradient-to-tr from-cyan-400 to-purple-500 bg-clip-text text-transparent">D</span>
+              {/* Double Helix Icon from Lucide with Gradient Applied */}
+              <Dna className="w-12 h-12 text-transparent" stroke="url(#blue-purple-gradient)" strokeWidth={2.5} />
+              
+              {/* SVG Definition for the gradient stroke */}
+              <svg width="0" height="0">
+                <linearGradient id="blue-purple-gradient" x1="100%" y1="100%" x2="0%" y2="0%">
+                  <stop stopColor="#A855F7" offset="0%" />
+                  <stop stopColor="#22D3EE" offset="100%" />
+                </linearGradient>
+              </svg>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Octokit } from "@octokit/rest"; 
-import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit, Sparkles, Check, History, MessageSquare, Info, Tag, FileText } from 'lucide-react';
+import { Layers, Zap, Shapes, Code, FileCode, ArrowLeft, Globe, Folder, ChevronRight, ChevronDown, Loader2, Trash2, Camera, Users, MousePointer2, Eye, EyeOff, Move, Palette, MapPin, MousePointerClick, X, BarChart2, Sun, Moon, Save, GitCommit, Sparkles, Check, History, MessageSquare, Info, Tag, FileText, Dna } from 'lucide-react';
 import Scene from './Scene';
 import AnalyticsPanel from './AnalyticsPanel';
 import HistoryPanel from './HistoryPanel';
@@ -692,7 +692,20 @@ export default function Dashboard({ user, token, repo, onBack }) {
   return (
     <div className={`h-screen w-screen bg-white dark:bg-black text-gray-900 dark:text-white flex overflow-hidden font-sans transition-colors duration-300 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
       <div className="w-16 border-r border-gray-200 dark:border-white/5 flex flex-col items-center py-6 gap-6 z-30 bg-gray-50 dark:bg-[#0a0a0a] shrink-0 transition-colors duration-300">
-        <div className="w-10 h-10 bg-gradient-to-tr from-neon-blue to-neon-purple rounded-lg flex items-center justify-center font-bold text-xl text-white">D</div>
+        
+        {/* --- REPLACED LOGO WITH APP.JSX GRADIENT DNA --- */}
+        <div className="relative w-10 h-10 bg-[#111] dark:bg-black rounded-xl flex items-center justify-center border border-white/10 shadow-lg">
+           <Dna className="w-6 h-6 text-transparent" stroke="url(#dashboard-helix-gradient)" strokeWidth={2.5} />
+           
+           {/* Gradient Definition (Scoped ID to avoid conflicts) */}
+           <svg width="0" height="0" className="absolute">
+             <linearGradient id="dashboard-helix-gradient" x1="100%" y1="100%" x2="0%" y2="0%">
+               <stop stopColor="#A855F7" offset="0%" />
+               <stop stopColor="#22D3EE" offset="100%" />
+             </linearGradient>
+           </svg>
+        </div>
+
         <div className="flex flex-col gap-4">
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue bg-blue-50 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-500 bg-yellow-50 dark:text-yellow-400 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><BarChart2 size={20} /></button>
