@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/assets/logo.png" width="200" />
+  <img src="src/assets/logo.png" width="250" />
 </div>
 
 <h1 align = "center">
@@ -8,7 +8,6 @@
 
 <div align = "center"> Websites used to be static. Now they undergo natural selection. </div>
 
-<br>
 <br>
 
 ## 🚀 Key Features
@@ -54,4 +53,5 @@ Directly modify your code using natural language. The integrated AI panel allows
 
 ## 🧠 Evolutionary Vision
 Darwin treats code as a living organism. By visualizing the "heartbeat" of a component through interactions, developers can identify bottlenecks and optimize UX flow through a spatial lens rather than a flat line of text.
+
 
