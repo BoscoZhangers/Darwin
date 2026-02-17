@@ -1,9 +1,161 @@
-import React, { useState, useEffect } from 'react';
-import { Github, LogOut, Command, Heart, Sparkles } from 'lucide-react'; 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Github, Command, Sparkles } from 'lucide-react'; 
+import { Canvas, useFrame, extend } from '@react-three/fiber';
+import { OrbitControls, Stars, Environment } from '@react-three/drei';
+import * as THREE from 'three';
 import { subscribeToAuth, signInWithGithub, signOut } from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
+
+// Extend Three.js elements so R3F can use them as JSX tags
+extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
+
+// --- 3D Components ---
+
+const HelperRung = ({ start, end, color }) => {
+    const curve = useMemo(() => new THREE.LineCurve3(start, end), [start, end]);
+    return (
+      <mesh>
+        <tubeGeometry args={[curve, 1, 0.2, 8, false]} />
+        <meshPhysicalMaterial 
+             transparent
+             opacity={0.3}
+             roughness={0.1}
+             metalness={0.9}
+             color={color}
+             emissive={color}
+             emissiveIntensity={0.2}
+        />
+      </mesh>
+    );
+}
+
+function SolidDNAHelix() {
+  const groupRef = useRef();
+  const STRAND_RADIUS = 0.6;
+  const HELIX_RADIUS = 4;
+  const HEIGHT = 25;
+  const TURNS = 3;
+  const POINTS_PER_TURN = 30;
+
+  // Procedurally generate curves and rung positions
+  const { curveA, curveB, rungs } = useMemo(() => {
+    const pointsA = [];
+    const pointsB = [];
+    const rungData = [];
+    const totalPoints = TURNS * POINTS_PER_TURN;
+
+    for (let i = 0; i <= totalPoints; i++) {
+      const t = i / totalPoints;
+      const angle = t * Math.PI * 2 * TURNS;
+      const y = (t - 0.5) * HEIGHT;
+
+      // Calculate positions for Strand A and B on opposite sides
+      const vecA = new THREE.Vector3(Math.cos(angle) * HELIX_RADIUS, y, Math.sin(angle) * HELIX_RADIUS);
+      const vecB = new THREE.Vector3(Math.cos(angle + Math.PI) * HELIX_RADIUS, y, Math.sin(angle + Math.PI) * HELIX_RADIUS);
+
+      pointsA.push(vecA);
+      pointsB.push(vecB);
+
+      // Add rungs periodically
+      if (i % 6 === 0 && i > 0 && i < totalPoints) {
+         rungData.push({ start: vecA, end: vecB });
+      }
+    }
+
+    return {
+      curveA: new THREE.CatmullRomCurve3(pointsA),
+      curveB: new THREE.CatmullRomCurve3(pointsB),
+      rungs: rungData
+    };
+  }, []);
+
+  // Animate rotation
+  useFrame((state, delta) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += delta * 0.15; // Slow spin
+      groupRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.2) * 0.1; // Slight wobble
+    }
+  });
+
+  // Shared material props for that "glassy/tech" look
+  const materialProps = {
+      transparent: true,
+      opacity: 0.5,        // Semi-transparent
+      roughness: 0.05,     // Very smooth
+      metalness: 0.9,      // Metallic reflection
+      clearcoat: 1,        // Shiny top layer
+      clearcoatRoughness: 0.1,
+      transmission: 0.2,   // Slight glass refraction effect
+  };
+
+  return (
+    <group ref={groupRef} rotation={[0.3, 0, 0]}> {/* Tilted slightly */}
+      {/* Strand 1 (Cyan/Blue theme) */}
+      <mesh>
+        <tubeGeometry args={[curveA, 200, STRAND_RADIUS, 16, false]} />
+        <meshPhysicalMaterial 
+          {...materialProps}
+          color="#22D3EE"
+          emissive="#0ea5e9"
+          emissiveIntensity={0.5}
+        />
+      </mesh>
+
+      {/* Strand 2 (Purple/Pink theme) */}
+      <mesh>
+        <tubeGeometry args={[curveB, 200, STRAND_RADIUS, 16, false]} />
+        <meshPhysicalMaterial 
+            {...materialProps}
+            color="#A855F7"
+            emissive="#d946ef"
+            emissiveIntensity={0.5}
+        />
+      </mesh>
+
+      {/* Connecting Rungs */}
+      {rungs.map((rung, i) => (
+          <HelperRung key={i} start={rung.start} end={rung.end} color={i % 2 === 0 ? "#22D3EE" : "#A855F7"} />
+      ))}
+    </group>
+  );
+}
+
+function SceneBackground() {
+  return (
+    <div className="absolute inset-0 z-0 transition-opacity duration-1000 ease-in-out">
+      <Canvas camera={{ position: [0, 0, 20], fov: 35 }} gl={{ antialias: true }}>
+        <color attach="background" args={['#050505']} />
+        {/* Lighting needed for physical materials to look good */}
+        <ambientLight intensity={0.2} />
+        <spotLight position={[10, 10, 10]} angle={0.3} penumbra={1} intensity={1} castShadow />
+        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#A855F7" />
+        
+        {/* Environment adds reflections to the metallic/glass surfaces */}
+        <Environment preset="city" />
+        <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
+        
+        <SolidDNAHelix />
+
+        <OrbitControls 
+          enablePan={false} 
+          enableZoom={true} 
+          minDistance={10} 
+          maxDistance={40}
+          autoRotate={false}
+          enableDamping={true}
+          dampingFactor={0.05}
+        />
+        
+        {/* Optional: subtle fog to blend distances */}
+        <fog attach="fog" args={['#050505', 20, 50]} />
+      </Canvas>
+    </div>
+  );
+}
+
+// --- Main App Component ---
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -50,21 +202,29 @@ export default function App() {
 
   const techStack = [
     { name: "Gemini", logo: <GeminiLogo /> },
-    { name: "React", logo: <img src="https://cdn.simpleicons.org/react/61DAFB" className="w-4 h-4" /> },
-    { name: "Tailwind", logo: <img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" className="w-4 h-4" /> },
-    { name: "JavaScript", logo: <img src="https://cdn.simpleicons.org/javascript/F7DF1E" className="w-4 h-4" /> },
+    { name: "React", logo: <img src="https://cdn.simpleicons.org/react/61DAFB" className="w-4 h-4" alt="react"/> },
+    { name: "Tailwind", logo: <img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" className="w-4 h-4" alt="tailwind"/> },
+    { name: "JavaScript", logo: <img src="https://cdn.simpleicons.org/javascript/F7DF1E" className="w-4 h-4" alt="js"/> },
     { name: "CSS", logo: <CSSLogo /> },
-    { name: "Python", logo: <img src="https://cdn.simpleicons.org/python/3776AB" className="w-4 h-4" /> },
-    { name: "Three.js", logo: <img src="https://cdn.simpleicons.org/three.js/ffffff" className="w-4 h-4" /> },
-    { name: "PyTorch", logo: <img src="https://cdn.simpleicons.org/pytorch/EE4C2C" className="w-4 h-4" /> },
-    { name: "FastAPI", logo: <img src="https://cdn.simpleicons.org/fastapi/05998B" className="w-4 h-4" /> },
-    { name: "Firebase", logo: <img src="https://cdn.simpleicons.org/firebase/FFCA28" className="w-4 h-4" /> },
+    { name: "Python", logo: <img src="https://cdn.simpleicons.org/python/3776AB" className="w-4 h-4" alt="python"/> },
+    { name: "Three.js", logo: <img src="https://cdn.simpleicons.org/three.js/ffffff" className="w-4 h-4" alt="three"/> },
+    { name: "PyTorch", logo: <img src="https://cdn.simpleicons.org/pytorch/EE4C2C" className="w-4 h-4" alt="pytorch"/> },
+    { name: "FastAPI", logo: <img src="https://cdn.simpleicons.org/fastapi/05998B" className="w-4 h-4" alt="fastapi"/> },
+    { name: "Firebase", logo: <img src="https://cdn.simpleicons.org/firebase/FFCA28" className="w-4 h-4" alt="firebase"/> },
   ];
 
   if (!user) {
     return (
-      <div className="h-screen w-screen bg-[#050505] text-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-purple-500/30">
+      // Removed bg-[#050505] here as the Canvas handles the background color now
+      <div className="h-screen w-screen text-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-purple-500/30">
         
+        {/* --- 3D Background Layer --- */}
+        <SceneBackground />
+         {/* Optional Overlay to ensure text readability if 3D gets too bright */}
+        <div className="absolute inset-0 bg-black/20 z-5 pointer-events-none"></div>
+
+
+        {/* --- Styles for UI --- */}
         <style>
           {`
             @keyframes marquee {
@@ -95,22 +255,13 @@ export default function App() {
               mask-image: radial-gradient(circle at center, black 0%, rgba(0,0,0,0.4) 40%, transparent 100%), 
                           linear-gradient(to right, transparent, black 20%, black 80%, transparent);
               mask-composite: intersect;
-              -webkit-mask-image: radial-gradient(circle at center, black 0%, rgba(0,0,0,0.4) 40%, transparent 100%), 
-                                  linear-gradient(to right, transparent, black 20%, black 80%, transparent);
-              -webkit-mask-composite: source-in;
             }
           `}
         </style>
 
-        <div className="absolute inset-0 pointer-events-none">
-           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[100px]" />
-           <div className="absolute top-0 left-0 w-full h-full opacity-20" 
-                style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-           </div>
-        </div>
-
-        <div className="z-10 flex flex-col items-center gap-8">
-          <div className="relative group cursor-default">
+        {/* --- Foreground UI (Z-Index 10 ensures it's above the canvas) --- */}
+        <div className="z-10 flex flex-col items-center gap-8 pointer-events-none select-none">
+          <div className="relative group cursor-default pointer-events-auto">
             {/* Pulsing Outer Glow */}
             <div className="absolute -inset-2 bg-gradient-to-r from-cyan-400 to-purple-600 rounded-2xl animate-pulse-glow shadow-[0_0_35px_rgba(34,211,238,0.5)]"></div>
             
@@ -122,23 +273,23 @@ export default function App() {
             </div>
           </div>
 
-          <div className="text-center space-y-2">
-            <h1 className="text-6xl font-extrabold tracking-[0.06em] text-white mr-[-0.2em]">Darwin</h1>
-            <div className="flex items-center justify-center gap-2 text-gray-400 text-sm uppercase tracking-widest">
+          <div className="text-center space-y-2 pointer-events-auto">
+            <h1 className="text-6xl font-extrabold tracking-[0.06em] text-white mr-[-0.2em] drop-shadow-2xl">Darwin</h1>
+            <div className="flex items-center justify-center gap-2 text-gray-300 text-sm uppercase tracking-widest font-medium drop-shadow-md">
                 <Command size={14} /> 
                 <span>Evolve your Websites with AI</span>
             </div>
           </div>
 
-          <button onClick={handleLogin} className="group relative mt-4 px-8 py-3.5 bg-white text-black font-bold text-sm rounded-full flex items-center gap-3 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+          <button onClick={handleLogin} className="pointer-events-auto group relative mt-4 px-8 py-3.5 bg-white text-black font-bold text-sm rounded-full flex items-center gap-3 transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] active:scale-95">
             <Github size={18} />
             <span>Connect GitHub</span>
             <div className="absolute inset-0 rounded-full border border-black/10" />
           </button>
         </div>
 
-        <div className="absolute bottom-0 w-full py-8 overflow-hidden">
-          <div className="flex items-center justify-center gap-2 text-[10px] text-gray-500 uppercase tracking-[0.3em] mb-4 opacity-50">
+        <div className="absolute bottom-0 w-full py-8 overflow-hidden z-10 pointer-events-none">
+          <div className="flex items-center justify-center gap-2 text-[10px] text-gray-400 uppercase tracking-[0.3em] mb-4 opacity-70 drop-shadow">
             <Sparkles size={10} />
             <span className="flex items-center gap-1.5">
               Powered By
@@ -149,13 +300,13 @@ export default function App() {
             <div className="animate-marquee whitespace-nowrap flex items-center">
               {[...techStack, ...techStack].map((tech, i) => (
                 <div key={i} className="flex items-center gap-3 mx-10 group cursor-default">
-                  <div className="w-4 h-4 flex items-center justify-center object-contain">
+                  <div className="w-4 h-4 flex items-center justify-center object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
                     {tech.logo}
                   </div>
-                  <span className="text-xs font-bold text-white transition-colors">
+                  <span className="text-xs font-bold text-white transition-colors drop-shadow-md">
                     {tech.name}
                   </span>
-                  <div className="ml-10 w-1 h-1 bg-white/10 rounded-full" />
+                  <div className="ml-10 w-1 h-1 bg-white/30 rounded-full box-shadow-[0_0_10px_ffffff]" />
                 </div>
               ))}
             </div>

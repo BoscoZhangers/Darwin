@@ -1,12 +1,12 @@
-// src/components/Scene.jsx
-import React, { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { useRef, useMemo, useEffect, useLayoutEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sphere, MeshDistortMaterial, Grid, Environment, TransformControls, Html } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+import { Vector3 } from 'three'; 
 import Crowd from './Crowd';
 
 // --- FEATURE BUBBLE (GRAVITY WELL) ---
-const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick, scale = 1, count = 0 }, ref) => {
+const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick, onDoubleClick, scale = 1, count = 0, ...props }, ref) => {
   useFrame((state) => {
     if (ref.current) {
         const t = state.clock.getElapsedTime();
@@ -15,7 +15,7 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick, sca
   });
 
   return (
-    <group ref={ref} onClick={onClick} scale={scale}>
+    <group ref={ref} onClick={onClick} onDoubleClick={onDoubleClick} scale={scale} {...props}>
       <Sphere args={[1, 64, 64]}>
         <MeshDistortMaterial 
           color={color} 
@@ -56,10 +56,10 @@ const FeatureBubble = React.forwardRef(({ color, label, isSelected, onClick, sca
 });
 
 // --- CLUSTER WITH REGISTRATION ---
-const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect, onRegister }) => {
+const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onSelect, onDoubleClick, onRegister, onUpdateBubblePosition }) => {
   const bubbleRef = useRef();
+  const MIN_Y = 6.0;
 
-  // Register the ref with the parent scene so Agents can find it
   useEffect(() => {
     if (bubbleRef.current && onRegister) {
         onRegister(id, bubbleRef.current);
@@ -72,8 +72,18 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
     return Math.min(base + growth, 3.0);
   }, [crowdCount]);
 
+  useLayoutEffect(() => {
+    if (bubbleRef.current) {
+        bubbleRef.current.position.set(
+          position[0], 
+          Math.max(position[1], MIN_Y), 
+          position[2]
+        );
+    }
+  }, [position]); 
+
   return (
-    <group>
+    <>
       {isSelected && (
         <TransformControls 
           object={bubbleRef} 
@@ -82,30 +92,112 @@ const BubbleCluster = ({ id, position, color, label, crowdCount, isSelected, onS
           depthTest={false}   
           renderOrder={999}   
           lineWidth={2}
+          onObjectChange={() => {
+            if (bubbleRef.current) {
+              if (bubbleRef.current.position.y < MIN_Y) {
+                bubbleRef.current.position.y = MIN_Y;
+              }
+            }
+          }}
+          onMouseUp={() => {
+             if (bubbleRef.current && onUpdateBubblePosition) {
+                 const { x, y, z } = bubbleRef.current.position;
+                 onUpdateBubblePosition(id, x, z, y); 
+             }
+          }}
         />
       )}
-      <group position={position}>
-        <FeatureBubble 
-          ref={bubbleRef} 
-          label={label} 
-          color={color} 
-          isSelected={isSelected} 
-          onClick={(e) => { e.stopPropagation(); onSelect(id); }} 
-          scale={targetScale}
-          count={crowdCount} 
-        />
-      </group>
-    </group>
+      
+      <FeatureBubble 
+        ref={bubbleRef} 
+        label={label} 
+        color={color} 
+        isSelected={isSelected} 
+        onClick={(e) => { e.stopPropagation(); onSelect(id); }} 
+        onDoubleClick={(e) => { e.stopPropagation(); onDoubleClick(id); }} 
+        scale={targetScale}
+        count={crowdCount} 
+      />
+    </>
   );
 };
 
-export default function Scene({ bubbles, userCount, activeId, setActiveId, darkMode = true, rawUsers, userTargets, demoMode }) {
+// --- CAMERA RIG ---
+function CameraRig({ focusedBubble, bubbleRefs }) {
+  const { camera, controls } = useThree();
+  
+  const targetLookAt = useRef(new Vector3(0, 0, 0));
+  const targetCamPos = useRef(new Vector3(8, 8, 12));
+  const savedLookAt = useRef(new Vector3(0, 0, 0));
+  const savedCamPos = useRef(new Vector3(8, 8, 12));
+  const isTransitioning = useRef(false);
+
+  // --- CRITICAL FIX: BREAK TRANSITION ON USER INTERACTION ---
+  useEffect(() => {
+    const onStartInteraction = () => {
+        // If the user grabs the camera, immediately stop any auto-animation
+        isTransitioning.current = false;
+    };
+
+    if (controls) {
+        controls.addEventListener('start', onStartInteraction);
+    }
+    return () => {
+        if (controls) {
+            controls.removeEventListener('start', onStartInteraction);
+        }
+    };
+  }, [controls]);
+
+  // Capture State logic
+  useEffect(() => {
+    if (focusedBubble) {
+        savedCamPos.current.copy(camera.position);
+        savedLookAt.current.copy(controls.target);
+        isTransitioning.current = true;
+    } else {
+        targetCamPos.current.copy(savedCamPos.current);
+        targetLookAt.current.copy(savedLookAt.current);
+        isTransitioning.current = true;
+    }
+  }, [focusedBubble]);
+
+  useFrame((state, delta) => {
+    if (focusedBubble) {
+        const ref = bubbleRefs.current[focusedBubble.id];
+        if (ref) {
+            const worldPos = new Vector3();
+            ref.getWorldPosition(worldPos);
+            
+            // Adjusted coordinates for "Left of Info Box" framing
+            targetLookAt.current.copy(worldPos).add(new Vector3(2.5, 0, 0));
+            targetCamPos.current.copy(targetLookAt.current).add(new Vector3(0, 3, 14));
+
+            controls.target.lerp(targetLookAt.current, 0.1);
+            camera.position.lerp(targetCamPos.current, 0.1);
+            controls.update();
+        }
+    } else if (isTransitioning.current) {
+        // Return animation
+        controls.target.lerp(targetLookAt.current, 0.1);
+        camera.position.lerp(targetCamPos.current, 0.1);
+        controls.update();
+
+        // Relaxed threshold (0.5) prevents getting stuck in "Zeno's Paradox"
+        if (camera.position.distanceTo(targetCamPos.current) < 0.5 && 
+            controls.target.distanceTo(targetLookAt.current) < 0.5) {
+            isTransitioning.current = false; 
+        }
+    }
+  });
+
+  return null;
+}
+
+export default function Scene({ bubbles = [], userCount, activeId, setActiveId, darkMode = true, rawUsers, userTargets, demoMode, focusedBubble, onBubbleDoubleClick, onUpdateBubblePosition }) {
   const bgColor = darkMode ? '#000000' : '#ffffff'; 
   const gridSection = darkMode ? '#00f3ff' : '#cbd5e1'; 
   const gridCell = darkMode ? '#bc13fe' : '#e2e8f0'; 
-  
-  // --- SHARED REFS (THE HOTLINE) ---
-  // This object stores the Live 3D Object of every bubble
   const bubbleRefs = useRef({}); 
 
   return (
@@ -117,7 +209,6 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
       >
         <color attach="background" args={[bgColor]} />
         {darkMode && <fog attach="fog" args={[bgColor, 25, 100]} />}
-
         <ambientLight intensity={darkMode ? 0.4 : 0.8} />
         <pointLight position={[10, 10, 10]} intensity={1.0} color="#ffffff" />
         <Environment preset={darkMode ? "city" : "studio"} />
@@ -127,18 +218,9 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
           <Bloom luminanceThreshold={1} mipmapBlur intensity={darkMode ? 2.5 : 0.2} radius={0.6} />
           <Vignette eskil={false} offset={0} darkness={darkMode ? 0.8 : 0.4} />
         </EffectComposer>
-
-        {/* --- CROWD NOW HAS ACCESS TO REFS --- */}
-        <Crowd 
-          bubbles={bubbles} 
-          capacity={userCount || 50} 
-          bubbleRefs={bubbleRefs} 
-          rawUsers={rawUsers}
-          userTargets={userTargets}
-          demoMode={demoMode}
-        />
-
-        {bubbles.map((b) => {
+        <CameraRig focusedBubble={focusedBubble} bubbleRefs={bubbleRefs} />
+        <Crowd bubbles={bubbles} capacity={userCount || 50} bubbleRefs={bubbleRefs} rawUsers={rawUsers} userTargets={userTargets} demoMode={demoMode} />
+        {(bubbles || []).map((b) => {
           if (!b.visible) return null;
           return (
             <BubbleCluster 
@@ -147,7 +229,8 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
               crowdCount={b.count} 
               isSelected={activeId === b.id} 
               onSelect={setActiveId}
-              // Register this bubble's 3D object into the ref map
+              onDoubleClick={onBubbleDoubleClick} 
+              onUpdateBubblePosition={onUpdateBubblePosition}
               onRegister={(id, ref) => (bubbleRefs.current[id] = ref)} 
             />
           );
