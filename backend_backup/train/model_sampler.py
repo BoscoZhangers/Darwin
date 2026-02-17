@@ -9,7 +9,7 @@ from PIL import ImageColor
 from pandas.api.types import is_numeric_dtype
 import re
 
-# --- PATH CONFIGURATION (THE FIX) ---
+# --- PATH CONFIGURATION ---
 # Get the directory where THIS file (model_sampler.py) is located
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Get the parent directory (backend_backup)
@@ -81,7 +81,6 @@ class Sampler():
 
         print(f"DEBUG: Loading CSV from {CSV_PATH}")
         
-        # FIX: Use Absolute Path
         if os.path.exists(CSV_PATH):
             df = pd.read_csv(CSV_PATH)
         else:
@@ -97,9 +96,7 @@ class Sampler():
 
         print(f"DEBUG: Loading Model from {MODEL_PATH}")
 
-        # FIX: Use Absolute Path & CPU Mapping
         if os.path.exists(MODEL_PATH):
-            # map_location='cpu' is crucial for Render (no GPU)
             self.model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
             print("Model loaded successfully")
         else:
@@ -114,10 +111,6 @@ class Sampler():
         webpage: The original html file, as a string
         '''
         def parse_darwin_styles(jsx_text):
-            # Pattern explanation:
-            # 1. Look for data-darwin-id="ID_NAME"
-            # 2. Look for style={{ STYLE_CONTENT }}
-            # We use a non-greedy dot .*? to stay within the braces
             pattern = r'data-darwin-id="([^"]+)"[\s\S]*?style=\{\{([^}]+)\}\}'
             
             matches = re.finditer(pattern, jsx_text)
@@ -127,13 +120,10 @@ class Sampler():
                 darwin_id = match.group(1)
                 style_content = match.group(2).strip()
                 
-                # Split properties by comma, but be careful of nested commas (like in padding)
-                # For simple inline styles, splitting by comma and colon works:
                 style_dict = {}
                 props = re.findall(r"(\w+):\s*['\"]?([^'\",]+)['\"]?", style_content)
                 
                 for key, value in props:
-                    # Clean up numeric values
                     try:
                         if value.isdigit():
                             style_dict[key] = int(value)
@@ -146,10 +136,7 @@ class Sampler():
 
             return results
 
-        # Execute
         parsed_styles = parse_darwin_styles(webpage)
-
-        # View results for one element
         df = pd.DataFrame(parsed_styles).T
 
         def fill_rgb(x):
@@ -184,37 +171,25 @@ class Sampler():
             none_replacement = 16 if measurement_type == 'px' else 1
             return [x if x is not None else none_replacement for x in vals]
 
-        # Convert colour columns into categories
         for col in df.columns:
-            # 1. Try to force it to numeric (handles strings like "450")
             converted_col = pd.to_numeric(df[col], errors='coerce')
 
             if not converted_col.isna().all():
-                # It's actually numeric! Update the column.
                 df[col] = converted_col
-                # print(f"{col} is Numeric.")
             elif is_measurement(df[col].dropna().tolist()):
                 df[col] = fill_measurement(df[col].tolist())
-                # print(f"{col} is a measurement")
             elif 'color' in col or 'Color' in col:
-                # It's a complex object (like your RGB color tuples)
                 df[col] = df[col].apply(lambda x: fill_rgb(x))
-                # print(f"{col} is a Color/Complex object (Needs expansion).")
             else:
-                # print(df[col].tolist())
-                # It's a true categorical string (like "solid" or "relative")
                 df[col] = df[col].astype('category')
-                # print(f"{col} is Categorical.")
 
 
         categorical_cols = []
         for col in df:
-        # Convert colour columns into categories
             if 'color' in col or 'Color' in col:
-                df[col] = df[col].apply(lambda x: x if isinstance(x, tuple) else (-1,-1,-1)) # transparent
+                df[col] = df[col].apply(lambda x: x if isinstance(x, tuple) else (-1,-1,-1)) 
                 df[[col+'_R',col+'_G',col+'_B']] = pd.DataFrame(df[col].tolist(), index=df.index)
                 df = df.drop(columns=[col])
-            # detect non-numeric columns as categories
             else:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 if not is_numeric_dtype(df[col]):
@@ -236,25 +211,46 @@ class Sampler():
             'btn-cta-2': 4
         }
 
+        # --- HEURISTIC FOR UNKNOWN IDs (Gravity Well) ---
+        # If the ID is unknown, calculate a value based on distance to the center.
+        if div_id not in predict_ref.index or div_id not in conversion_table:
+            # 1. Define center of a typical screen (e.g. 1200x800)
+            center_x, center_y = 600, 400
+            
+            # 2. Calculate Euclidean distance
+            dist = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+            
+            # 3. Gaussian Decay: Value is highest (100) at 0 distance
+            #    Sigma = 300 means the value drops significantly after ~300px away
+            max_val = 100
+            sigma = 300
+            heuristic_val = max_val * np.exp(-(dist**2) / (2 * sigma**2))
+            
+            # print(f"Unknown ID '{div_id}': Dist={dist:.1f}, Val={int(heuristic_val)}")
+            return int(heuristic_val)
+        # ------------------------------------------------
+
         new_attributes = []
-        for row in predict_ref.loc[div_id].items():
-            if predict_other is not None and row[0] in predict_other.keys() and type(predict_other[row[0]]) is int:
-                new_attributes.append(predict_other[row[0]])
-            else:
-                new_attributes.append(row[1])
-        
-        bct = self.color_scaler.transform(np.array([[new_attributes[9], new_attributes[10], new_attributes[11]]]))
-        ct = self.color_scaler.transform(np.array([[new_attributes[12], new_attributes[13], new_attributes[14]]]))
-        st = self.size_scaler.transform(np.array([[new_attributes[0], new_attributes[1], new_attributes[2], new_attributes[3]]]))
-        final_list = [transformed[0, 0], transformed[0, 1], conversion_table[div_id], st[0, 0], st[0, 1], st[0, 2], st[0, 3]] 
-        final_list.extend(new_attributes[4:9])
-        final_list.extend([bct[0, 0], bct[0, 1], bct[0, 2], ct[0,0], ct[0, 1], ct[0, 2]])
-        final_list.extend(new_attributes[15:])
+        try:
+            for row in predict_ref.loc[div_id].items():
+                if predict_other is not None and row[0] in predict_other.keys() and type(predict_other[row[0]]) is int:
+                    new_attributes.append(predict_other[row[0]])
+                else:
+                    new_attributes.append(row[1])
+            
+            bct = self.color_scaler.transform(np.array([[new_attributes[9], new_attributes[10], new_attributes[11]]]))
+            ct = self.color_scaler.transform(np.array([[new_attributes[12], new_attributes[13], new_attributes[14]]]))
+            st = self.size_scaler.transform(np.array([[new_attributes[0], new_attributes[1], new_attributes[2], new_attributes[3]]]))
+            final_list = [transformed[0, 0], transformed[0, 1], conversion_table[div_id], st[0, 0], st[0, 1], st[0, 2], st[0, 3]] 
+            final_list.extend(new_attributes[4:9])
+            final_list.extend([bct[0, 0], bct[0, 1], bct[0, 2], ct[0,0], ct[0, 1], ct[0, 2]])
+            final_list.extend(new_attributes[15:])
 
-        count = self.model(torch.tensor(np.nan_to_num(final_list, nan=-1.0), dtype=torch.float32))
-        # print(f"[{x}, {y}, {div_id}]", count)
-
-        return max(0, count.item())
+            count = self.model(torch.tensor(np.nan_to_num(final_list, nan=-1.0), dtype=torch.float32))
+            return max(0, count.item())
+        except Exception as e:
+            print(f"Error processing ID '{div_id}': {e}")
+            return 0
 
 
 if __name__ == '__main__':
