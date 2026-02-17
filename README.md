@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/favicon.svg" width="200" />
+  <img src="src/assets/logo.png" width="200" />
 </div>
 
 <h1 align = "center">
@@ -54,3 +54,4 @@ Directly modify your code using natural language. The integrated AI panel allows
 
 ## 🧠 Evolutionary Vision
 Darwin treats code as a living organism. By visualizing the "heartbeat" of a component through interactions, developers can identify bottlenecks and optimize UX flow through a spatial lens rather than a flat line of text.
+
