@@ -25,6 +25,8 @@ Directly modify your code using natural language. The integrated AI panel allows
 * **Syntax-Highlighted Editor**: A full-featured editor workspace with GitHub sync and commit capabilities.
 * **Theming**: Toggle between high-contrast Dark and Light modes for both the 3D scene and the analytics panels.
 
+<br>
+
 ## 🛠️ Tech Stack
 
 * **Frontend**: React, Tailwind CSS, Lucide React
@@ -33,7 +35,9 @@ Directly modify your code using natural language. The integrated AI panel allows
 * **Backend/Auth**: Firebase (Swarm Subscription), Octokit (GitHub API)
 * **Post-processing**: Bloom, Vignette (EffectComposer)
 
-## 📦 Getting Started
+<br>
+
+## 📦 Dev Setup
 
 1. **Clone the repository**
    ```bash
@@ -51,7 +55,10 @@ Directly modify your code using natural language. The integrated AI panel allows
     npm run dev
    ```
 
+<br>
+
 ## 🧠 Evolutionary Vision
 Darwin treats code as a living organism. By visualizing the "heartbeat" of a component through interactions, developers can identify bottlenecks and optimize UX flow through a spatial lens rather than a flat line of text.
+
 
 
