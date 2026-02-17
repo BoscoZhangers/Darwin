@@ -46,14 +46,15 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
   useEffect(() => {
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
-      // --- UPDATE: Pass the filename up to the handler ---
+      
+      // Update Position: Pass file path up to parent
       if (e.data.type === 'UPDATE_POS') {
           handleUpdateLayout(
               e.data.dataDarwinId || e.data.index, 
               e.data.x, 
               e.data.y, 
               null, 
-              e.data.file // <--- CRITICAL: Pass the source file
+              e.data.file 
           );
       }
       if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
@@ -73,7 +74,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
     return JSON.stringify(effectiveFiles);
   };
 
-  // --- IFRAME SCRIPT ---
   const srcDoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -116,7 +116,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         let idx = 0;
         return code.replace(new RegExp('<(' + TAGS + ')\\\\b([^>]*)>', 'g'), (match, tag, props) => {
              const currentIndex = idx++;
-             // INJECT FILENAME so the element knows where it came from
              return \`<InteractiveElement _tag="\${tag}" _darwinIndex={\${currentIndex}} _darwinFile="\${filename}" \${props}>\`;
         }).replace(new RegExp('<\\\\/(' + TAGS + ')>', 'g'), '</InteractiveElement>');
       } catch(e) { return code; }
@@ -191,7 +190,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         
         const handleUp = () => { 
           setIsDragging(false); 
-          // SEND FILE PATH HERE
           window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: pos.x, y: pos.y, file: _darwinFile }, '*'); 
         }; 
 
@@ -210,16 +208,41 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
     };
 
+    // --- RESTORED EXTERNALS ---
     const EXTERNALS = { 
       'react': React, 
       'react-dom': ReactDOM, 
-      'react-dom/client': { ...ReactDOM, default: ReactDOM }, // <--- FIX FOR createRoot ERROR
-      'react-dom/client': ReactDOM // Fallback/alias
+      // Fix for React 18 createRoot error
+      'react-dom/client': { ...ReactDOM, default: ReactDOM, createRoot: ReactDOM.createRoot },
+      
+      // Fix for Lucide Icons
+      'lucide-react': new Proxy({}, { 
+          get: (target, prop) => (props) => React.createElement('svg', { ...props, viewBox: "0 0 24 24", width: 24, height: 24, fill: "none", stroke: "currentColor", strokeWidth: 2, style: { ...props.style, opacity: 0.5 } }, 
+            React.createElement('circle', { cx: 12, cy: 12, r: 10 }), 
+            React.createElement('path', { d: "M12 8v8M8 12h8" })
+          ) 
+      }),
+
+      // Fix for Firebase
+      'firebase/app': {
+        initializeApp: (config) => {
+          if (!window.firebase) throw new Error("Firebase SDK not loaded.");
+          if (firebase.apps.length > 0) return firebase.apps[0];
+          return firebase.initializeApp(config);
+        }
+      },
+      'firebase/database': {
+        getDatabase: (app) => firebase.database(app),
+        ref: (db, path) => db.ref(path),
+        set: (ref, value) => ref.set(value),
+        push: (ref, value) => ref.push(value),
+        update: (ref, value) => ref.update(value),
+        remove: (ref) => ref.remove(),
+        onDisconnect: (ref) => ref.onDisconnect(),
+        increment: (val) => firebase.database.ServerValue.increment(val)
+      }
     };
     
-    // Fix: Merge into one definition that handles both
-    EXTERNALS['react-dom/client'] = { ...ReactDOM, default: ReactDOM, createRoot: ReactDOM.createRoot };
-
     function resolvePath(base, relative) { if (!relative.startsWith('.')) return relative; const stack = base.split('/'); stack.pop(); const parts = relative.split('/'); for (let i = 0; i < parts.length; i++) { if (parts[i] === '.') continue; if (parts[i] === '..') stack.pop(); else stack.push(parts[i]); } let path = stack.join('/'); if (files[path]) return path; if (files[path + '.jsx']) return path + '.jsx'; if (files[path + '.js']) return path + '.js'; const imgExts = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']; for (let ext of imgExts) { if (files[path + ext]) return path + ext; } return path; }
     
     function require(currentPath, importPath) { 
@@ -534,7 +557,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
     if (demoMode) {
       // 1. Identify File
-      // Use the file path sent from the iframe, fallback to existing metadata, fallback to App.jsx
       const bubble = bubbles.find(b => b.id === id);
       const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
 
