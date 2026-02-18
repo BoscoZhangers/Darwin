@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
-import { Github, Command, Sparkles, Dna, Play, Monitor, BarChart, MousePointer2 } from 'lucide-react'; 
+import { Github, Command, Sparkles, Dna, Play, Monitor, BarChart, MousePointer2, ChevronsDown } from 'lucide-react'; 
 import { Canvas, useFrame, extend, useThree } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -190,7 +190,7 @@ function SceneBackground() {
 // --- NEW COMPONENT: Features Showcase ---
 const FeaturesShowcase = () => {
   return (
-    <div className="relative z-10 w-full bg-gradient-to-b from-transparent via-black/90 to-black text-white py-24 px-6 md:px-12">
+    <div className="relative z-10 w-full bg-gradient-to-b from-transparent via-black/90 to-black text-white py-24 px-6 md:px-12" id="features">
       <div className="max-w-7xl mx-auto space-y-32">
         
         {/* Feature 1: Analytics */}
@@ -212,7 +212,6 @@ const FeaturesShowcase = () => {
               <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50 group-hover:bg-gray-800/40 transition-colors">
                 <span className="text-gray-500 font-mono text-xs uppercase tracking-widest">Analytics Dashboard Preview</span>
               </div>
-              {/* You can replace this div with an <img src="..." /> later */}
             </div>
           </div>
         </div>
@@ -262,14 +261,95 @@ const FeaturesShowcase = () => {
         </div>
 
       </div>
-      
-      {/* Footer */}
-      <div className="mt-32 pt-8 border-t border-white/5 text-center text-gray-500 text-sm">
-        <p>&copy; 2026 Darwin. Evolution for your codebase.</p>
-      </div>
     </div>
   );
 };
+
+// --- NEW COMPONENT: Scroll Nudge ---
+const ScrollNudge = () => {
+    const handleScroll = () => {
+        window.scrollTo({
+            top: window.innerHeight,
+            behavior: 'smooth'
+        });
+    };
+
+    return (
+        <div 
+            onClick={handleScroll}
+            className="absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 cursor-pointer opacity-70 hover:opacity-100 transition-opacity duration-300 pointer-events-auto"
+        >
+            <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-400 font-bold animate-pulse">Explore Features</span>
+            <div className="w-6 h-9 border-2 border-white/30 rounded-full flex justify-center p-1 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                <div className="w-1 h-2 bg-white rounded-full animate-scroll-wheel" />
+            </div>
+            <ChevronsDown size={18} className="text-white/50 animate-bounce" />
+        </div>
+    )
+}
+
+// --- NEW COMPONENT: Footer (Marquee + Copyright) ---
+const Footer = () => {
+    const GeminiLogo = () => (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-opacity">
+          <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="white" />
+        </svg>
+      );
+    
+      const CSSLogo = () => (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-opacity">
+          <path d="M5 3L4.35 6.15H17.65L17.1 9.15H4.1L3.45 12.3H16.45L15.65 16.35L10 18L4.35 16.35L4.7 14.65H1.55L0.75 19.35L10 22.15L19.25 19.35L21.25 3H5Z" fill="#1572B6" />
+        </svg>
+      );
+    
+      const techStack = [
+        { name: "Gemini", logo: <GeminiLogo /> },
+        { name: "React", logo: <img src="https://cdn.simpleicons.org/react/61DAFB" className="w-4 h-4" alt="react"/> },
+        { name: "Tailwind", logo: <img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" className="w-4 h-4" alt="tailwind"/> },
+        { name: "JavaScript", logo: <img src="https://cdn.simpleicons.org/javascript/F7DF1E" className="w-4 h-4" alt="js"/> },
+        { name: "CSS", logo: <CSSLogo /> },
+        { name: "Python", logo: <img src="https://cdn.simpleicons.org/python/3776AB" className="w-4 h-4" alt="python"/> },
+        { name: "Three.js", logo: <img src="https://cdn.simpleicons.org/three.js/ffffff" className="w-4 h-4" alt="three"/> },
+        { name: "PyTorch", logo: <img src="https://cdn.simpleicons.org/pytorch/EE4C2C" className="w-4 h-4" alt="pytorch"/> },
+        { name: "FastAPI", logo: <img src="https://cdn.simpleicons.org/fastapi/05998B" className="w-4 h-4" alt="fastapi"/> },
+        { name: "Firebase", logo: <img src="https://cdn.simpleicons.org/firebase/FFCA28" className="w-4 h-4" alt="firebase"/> },
+      ];
+
+    return (
+        <div className="relative z-10 w-full bg-black border-t border-white/10 py-12 pb-16 flex flex-col gap-10">
+            {/* Tech Stack Marquee */}
+            <div className="w-full py-4 overflow-hidden z-10 pointer-events-none">
+                <div className="flex items-center justify-center gap-2 text-[10px] text-gray-400 uppercase tracking-[0.3em] mb-6 opacity-50 drop-shadow">
+                    <Sparkles size={10} />
+                    <span className="flex items-center gap-1.5">
+                    Powered By
+                    </span>
+                </div>
+                
+                <div className="conveyor-spotlight relative flex overflow-hidden">
+                    <div className="animate-marquee whitespace-nowrap flex items-center">
+                    {[...techStack, ...techStack].map((tech, i) => (
+                        <div key={i} className="flex items-center gap-3 mx-10 group cursor-default">
+                        <div className="w-4 h-4 flex items-center justify-center object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                            {tech.logo}
+                        </div>
+                        <span className="text-xs font-bold text-white transition-colors drop-shadow-md">
+                            {tech.name}
+                        </span>
+                        <div className="ml-10 w-1 h-1 bg-white/30 rounded-full box-shadow-[0_0_10px_ffffff]" />
+                        </div>
+                    ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Copyright */}
+            <div className="text-center text-gray-600 text-sm">
+                <p>&copy; 2026 Darwin. Evolution for your codebase.</p>
+            </div>
+        </div>
+    );
+}
 
 // --- Main App Component ---
 
@@ -304,31 +384,6 @@ export default function App() {
     setSelectedRepo(null);
   };
 
-  const GeminiLogo = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-opacity">
-      <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="white" />
-    </svg>
-  );
-
-  const CSSLogo = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-opacity">
-      <path d="M5 3L4.35 6.15H17.65L17.1 9.15H4.1L3.45 12.3H16.45L15.65 16.35L10 18L4.35 16.35L4.7 14.65H1.55L0.75 19.35L10 22.15L19.25 19.35L21.25 3H5Z" fill="#1572B6" />
-    </svg>
-  );
-
-  const techStack = [
-    { name: "Gemini", logo: <GeminiLogo /> },
-    { name: "React", logo: <img src="https://cdn.simpleicons.org/react/61DAFB" className="w-4 h-4" alt="react"/> },
-    { name: "Tailwind", logo: <img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" className="w-4 h-4" alt="tailwind"/> },
-    { name: "JavaScript", logo: <img src="https://cdn.simpleicons.org/javascript/F7DF1E" className="w-4 h-4" alt="js"/> },
-    { name: "CSS", logo: <CSSLogo /> },
-    { name: "Python", logo: <img src="https://cdn.simpleicons.org/python/3776AB" className="w-4 h-4" alt="python"/> },
-    { name: "Three.js", logo: <img src="https://cdn.simpleicons.org/three.js/ffffff" className="w-4 h-4" alt="three"/> },
-    { name: "PyTorch", logo: <img src="https://cdn.simpleicons.org/pytorch/EE4C2C" className="w-4 h-4" alt="pytorch"/> },
-    { name: "FastAPI", logo: <img src="https://cdn.simpleicons.org/fastapi/05998B" className="w-4 h-4" alt="fastapi"/> },
-    { name: "Firebase", logo: <img src="https://cdn.simpleicons.org/firebase/FFCA28" className="w-4 h-4" alt="firebase"/> },
-  ];
-
   if (!user) {
     return (
       // CHANGED: Main container allows scrolling now (min-h-screen, overflow-y-auto)
@@ -356,6 +411,14 @@ export default function App() {
                 opacity: 1; 
               }
             }
+            /* NEW: Scroll Wheel Animation */
+            @keyframes scroll-wheel {
+                0% { transform: translateY(0); opacity: 1; }
+                100% { transform: translateY(10px); opacity: 0; }
+            }
+            .animate-scroll-wheel {
+                animation: scroll-wheel 1.5s infinite;
+            }
             .animate-marquee {
               display: flex;
               width: max-content;
@@ -374,6 +437,7 @@ export default function App() {
 
         {/* --- HERO SECTION (100vh) --- */}
         <div className="relative h-screen w-full flex flex-col items-center justify-center shrink-0 z-10 pointer-events-none select-none">
+            
             <div className="flex flex-col items-center gap-8">
             <div className="relative group cursor-default pointer-events-auto">
                 {/* Pulsing Outer Glow */}
@@ -410,34 +474,15 @@ export default function App() {
             </button>
             </div>
 
-            <div className="absolute bottom-0 w-full py-8 overflow-hidden z-10 pointer-events-none">
-            <div className="flex items-center justify-center gap-2 text-[10px] text-gray-400 uppercase tracking-[0.3em] mb-4 opacity-70 drop-shadow">
-                <Sparkles size={10} />
-                <span className="flex items-center gap-1.5">
-                Powered By
-                </span>
-            </div>
-            
-            <div className="conveyor-spotlight relative flex overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap flex items-center">
-                {[...techStack, ...techStack].map((tech, i) => (
-                    <div key={i} className="flex items-center gap-3 mx-10 group cursor-default">
-                    <div className="w-4 h-4 flex items-center justify-center object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
-                        {tech.logo}
-                    </div>
-                    <span className="text-xs font-bold text-white transition-colors drop-shadow-md">
-                        {tech.name}
-                    </span>
-                    <div className="ml-10 w-1 h-1 bg-white/30 rounded-full box-shadow-[0_0_10px_ffffff]" />
-                    </div>
-                ))}
-                </div>
-            </div>
-            </div>
+            {/* Scroll Nudge (Positioned nicely at bottom now) */}
+            <ScrollNudge />
         </div>
 
         {/* --- SCROLLABLE CONTENT BELOW FOLD --- */}
         <FeaturesShowcase />
+
+        {/* --- FOOTER (Powered By + Copyright) --- */}
+        <Footer />
 
         <Analytics />
       </div>
