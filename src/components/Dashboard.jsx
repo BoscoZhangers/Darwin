@@ -504,10 +504,31 @@ export default function Dashboard({ user, token, repo, onBack }) {
       }
   };
 
+  // --- NEW HELPER: Normalize Bubbles to 100% ---
+  const normalizeAndSetBubbles = useCallback((bubbleData, updatingId = null, newCount = null) => {
+      let tempBubbles = bubbleData.map(b => 
+          (updatingId && b.label === updatingId && newCount !== null) ? { ...b, count: newCount } : b
+      );
+
+      // Sum all probabilities (counts)
+      const totalProb = tempBubbles.reduce((sum, b) => sum + (b.count || 0), 0);
+
+      // Normalization: If sum > 100, scale down.
+      if (totalProb > 100) {
+          const scale = 100 / totalProb;
+          tempBubbles = tempBubbles.map(b => ({
+              ...b,
+              count: Math.floor((b.count || 0) * scale)
+          }));
+      }
+
+      setBubbles(tempBubbles);
+  }, []);
+
   const fetchModelPredictions = useCallback(async (currentBubbles) => {
-      setAiLog(prev => [...prev, { role: 'system', text: 'Fetching AI Model predictions...' }]);
+      setAiLog(prev => [...prev, { role: 'system', text: 'Fetching AI Model probabilities...' }]);
       
-      const newBubbles = await Promise.all(currentBubbles.map(async (b) => {
+      const predictedBubbles = await Promise.all(currentBubbles.map(async (b) => {
           let id = b.label;
           if (typeof id == "number") {
              const mockIds = ["nav-main", "hero-text", "btn-cta", "description", "btn-cta-2"];
@@ -527,16 +548,18 @@ export default function Dashboard({ user, token, repo, onBack }) {
               });
               if (!resp.ok) return b;
               const json = await resp.json();
+              // Interpret 'count' as a probability percentage (0-100)
               if (typeof json?.count === 'number') {
-                  return { ...b, count: json.count };
+                  return { ...b, count: json.count }; 
               }
           } catch(e) { console.error(e); }
           return b;
       }));
       
-      setBubbles(newBubbles);
-      setAiLog(prev => [...prev, { role: 'success', text: 'Model data loaded.' }]);
-  }, []);
+      // Use helper to ensure <= 100%
+      normalizeAndSetBubbles(predictedBubbles);
+      setAiLog(prev => [...prev, { role: 'success', text: 'Probabilities loaded.' }]);
+  }, [normalizeAndSetBubbles]);
 
   useEffect(() => {
     if (demoMode) {
@@ -690,13 +713,22 @@ export default function Dashboard({ user, token, repo, onBack }) {
         if (!resp.ok) return;
         const json = await resp.json(); 
         if (typeof json?.count === 'number') {
-            setBubbles(prev => {
-              const updated = prev.map(b => b.label === div_id ? { ...b, count : json?.count} : b);
-              
-              const total = updated.reduce((sum, b) => sum + (b.count || 0), 0);
-              setTotalDemoUsers(total);
-              
-              return updated;
+            // Use helper to set and normalize new count
+            setBubbles(currentBubbles => {
+                let tempBubbles = currentBubbles.map(b => 
+                    b.label === div_id ? { ...b, count: json.count } : b
+                );
+                
+                // Perform the same normalization logic inside the setter to guarantee fresh state
+                const totalProb = tempBubbles.reduce((sum, b) => sum + (b.count || 0), 0);
+                if (totalProb > 100) {
+                    const scale = 100 / totalProb;
+                    tempBubbles = tempBubbles.map(b => ({
+                        ...b,
+                        count: Math.floor((b.count || 0) * scale)
+                    }));
+                }
+                return tempBubbles;
             });
         }
       } catch (e) { console.error(e); } 
@@ -758,7 +790,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         
         if (newX != undefined && newY != undefined) {
           newCode = newCode.replace(regex, (matchTag) => {
-              // console.log(matchTag);
+              console.log(matchTag);
               if (matchTag.match(/style={{/)) {
                   return matchTag.replace(/style={{([\s\S]*?)}}/, (fullStyle, innerStyle) => {
                       let updatedStyle = innerStyle;
@@ -801,10 +833,16 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
     }, [demoMode, bubbles]); 
 
+  // --- NEW: Calculate Total Users Based on Probabilities ---
   useEffect(() => {
-    const total = bubbles.reduce((sum, b) => sum + (b.count || 0), 0);
-    setTotalDemoUsers(total);
-  }, [bubbles])
+    // If Demo Mode, total users = 50 + Sum of Probabilities
+    if (demoMode) {
+        const sumProb = bubbles.reduce((sum, b) => sum + (b.count || 0), 0);
+        setTotalDemoUsers(50 + sumProb);
+    } else {
+        // In live mode, it comes from firebase listener (users_full)
+    }
+  }, [bubbles, demoMode])
 
   useEffect(() => {
     if (!extractedGhost) return;
@@ -906,7 +944,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [token, repo]);
   const handleAcceptAi = () => {
       if (proposedCode) {
-          setFileContents(prev => ({ ...prev, ['src/pages/Home.jsx']: proposedCode }));
+          setFileContents(prev => ({ ...prev, ['src/App.jsx']: proposedCode }));
           setProposedCode(null);
           setAiPrompt("");
           setAiLog(prev => [...prev, { role: 'success', text: 'AI Changes Applied' }]);
@@ -916,135 +954,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleCodeChange = (path, newCode) => { setFileContents(prev => ({ ...prev, [path]: newCode })); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
-  const handleCommitChanges = async () => {
-    // 1. Safety check
-    if (Object.keys(fileContents).length === 0) return;
-    
-    setIsSaving(true);
-    const octokit = new Octokit({ auth: token });
-    
-    try {
-      // 2. Get latest commit and base tree
-      const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch}`,
-      });
-      const latestCommitSha = refData.object.sha;
-
-      const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        commit_sha: latestCommitSha,
-      });
-      const baseTreeSha = commitData.tree.sha;
-
-      // 3. Prepare blobs for ALL text files in fileContents
-      // We filter out images to avoid corrupting them (since they are stored as Data URIs in state)
-      const filesToUpload = Object.entries(fileContents).filter(([path]) => !isImageFile(path));
-      
-      const newTreeItems = await Promise.all(filesToUpload.map(async ([path, content]) => {
-        const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
-          owner: repo.owner.login,
-          repo: repo.name,
-          content: content,
-          encoding: 'utf-8',
-        });
-        
-        return {
-          path: path,
-          mode: '100644',
-          type: 'blob',
-          sha: blobData.sha,
-        };
-      }));
-
-      // 4. Create a new tree with ALL changes
-      const { data: newTreeData } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        base_tree: baseTreeSha,
-        tree: newTreeItems,
-      });
-
-      // 5. Create commit
-      const { data: newCommitData } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        message: `Update ${newTreeItems.length} files via Darwin`,
-        tree: newTreeData.sha,
-        parents: [latestCommitSha],
-      });
-
-      // 6. Push
-      await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch}`,
-        sha: newCommitData.sha,
-      });
-
-      setAiLog(prev => [...prev, { role: 'success', text: `Successfully pushed ${newTreeItems.length} files.` }]);
-    } catch (error) {
-      console.error(error);
-      setAiLog(prev => [...prev, { role: 'error', text: `Failed to push: ${error.message}` }]);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsAiGenerating(true);
-    
-    // Safety check: Ensure the URL is formed correctly
-    const apiUrl = `${APP_HOST}${PORT}/api/generate_code`;
-    
-    try {
-        const currentCode = fileContents['src/pages/Home.jsx'] || '';
-        
-        setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
-
-        // console.log(aiPrompt)
-        const resp = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: aiPrompt,
-                code: currentCode
-            })
-        });
-
-        if (!resp.ok) {
-            const errorData = await resp.json().catch(() => ({}));
-            throw new Error(errorData.error || `Server responded with ${resp.status}`);
-        }
-
-        const data = await resp.json();
-        if (data.code) {
-            setProposedCode(data.code);
-            setAiLog(prev => [...prev, { role: 'success', text: 'AI generated a new version of App.jsx. Review above!' }]);
-        } else {
-            throw new Error("AI returned empty code.");
-        }
-
-    } catch (err) {
-        console.error("AI Assistant Error:", err);
-        
-        // Detailed error logging for the UI
-        let errorMessage = "AI Generation Failed.";
-        if (err.message.includes("Failed to fetch")) {
-            errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
-        } else {
-            errorMessage = `AI Error: ${err.message}`;
-        }
-
-        setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
-        setActivePanel('logs'); // Auto-switch to logs so you see the error
-    } finally {
-        setIsAiGenerating(false);
-    }
-  };
+  const handleCommitChanges = async () => {};
+  const handleAiGenerate = async () => {};
 
   return (
     <div className={`h-screen w-screen bg-white dark:bg-black text-gray-900 dark:text-white flex overflow-hidden font-sans transition-colors duration-300 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>

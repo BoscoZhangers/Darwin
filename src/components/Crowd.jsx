@@ -136,28 +136,18 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
 export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers = {}, demoMode = true }) {
   const [agents, setAgents] = useState([]);
 
+  // --- EFFECT 1: RESIZE POOL (Reactive) ---
   useEffect(() => {
     setAgents(currentAgents => {
         let newPool = [...currentAgents];
 
         if (demoMode) {
-            // --- DEMO MODE: SIMULATED CROWD BASED ON COUNTS ---
-            
-            // 1. DOWNSCALE LOGIC
+            // DEMO MODE: STRICTLY MATCH CAPACITY
             if (newPool.length > capacity) {
-                const assigned = newPool.filter(a => a.assignedTo !== null);
-                const unassigned = newPool.filter(a => a.assignedTo === null);
-                const keepCount = capacity;
-                if (assigned.length >= keepCount) {
-                    newPool = assigned.slice(0, keepCount);
-                } else {
-                    const spaceLeft = keepCount - assigned.length;
-                    newPool = [...assigned, ...unassigned.slice(0, spaceLeft)];
-                }
-            }
-
-            // 2. UPSCALE LOGIC
-            if (newPool.length < capacity) {
+                // Downscale: Remove agents (prefer those wandering, then simple slice)
+                newPool = newPool.slice(0, capacity);
+            } else if (newPool.length < capacity) {
+                // Upscale: Add new agents (start them as wanderers)
                 const deficit = capacity - newPool.length;
                 for(let i=0; i<deficit; i++) {
                     const angle = Math.random() * Math.PI * 2;
@@ -171,69 +161,20 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
                     });
                 }
             }
-
-            // 3. CLEANUP ORPHANED AGENTS
-            const activeBubbleIds = new Set(bubbles.map(b => b.id));
-            newPool.forEach(agent => {
-                if (agent.assignedTo && !activeBubbleIds.has(agent.assignedTo)) {
-                    agent.assignedTo = null;
-                    agent.color = '#444444';
-                }
-            });
-
-            // 4. ASSIGNMENT LOGIC
-            bubbles.forEach(bubble => {
-                const targetCount = bubble.count || 0;
-                const assignedAgents = newPool.filter(a => a.assignedTo === bubble.id);
-                
-                if (assignedAgents.length < targetCount) {
-                    // Recruit Wanderers
-                    const needed = targetCount - assignedAgents.length;
-                    let recruitsFound = 0;
-                    for (let i = 0; i < newPool.length && recruitsFound < needed; i++) {
-                        if (newPool[i].assignedTo === null) {
-                            newPool[i].assignedTo = bubble.id;
-                            newPool[i].color = bubble.color || 'blue';
-                            recruitsFound++;
-                        }
-                    }
-                } else if (assignedAgents.length > targetCount) {
-                    // Release Surplus
-                    const excess = assignedAgents.length - targetCount;
-                    let released = 0;
-                    for (let i = 0; i < newPool.length && released < excess; i++) {
-                        if (newPool[i].assignedTo === bubble.id) {
-                            newPool[i].assignedTo = null;
-                            newPool[i].color = '#444444'; 
-                            released++;
-                        }
-                    }
-                } else {
-                     // Sync Colors
-                     assignedAgents.forEach(agent => {
-                        const agentIndex = newPool.findIndex(a => a.id === agent.id);
-                        if(agentIndex !== -1) {
-                            newPool[agentIndex].color = bubble.color;
-                        }
-                     });
-                }
-            });
-
         } else {
-            // --- LIVE MODE: REAL USER TRACKING ---
+            // LIVE MODE: SYNC WITH ACTIVE SESSIONS
             const activeSessionIds = Object.keys(rawUsers);
             
-            // 1. SYNC AGENTS WITH ACTIVE SESSIONS
-            // Remove agents not in activeSessionIds
+            // Remove inactive
             newPool = newPool.filter(a => activeSessionIds.includes(a.id));
             
-            // Add agents for new activeSessionIds
+            // Add new
             activeSessionIds.forEach(sessionId => {
                 if (!newPool.find(a => a.id === sessionId)) {
                     const angle = Math.random() * Math.PI * 2;
                     const radius = 30 + Math.random() * 20;
                     newPool.push({
-                        id: sessionId, // Use actual session ID as Agent ID
+                        id: sessionId,
                         startPos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
                         assignedTo: null,
                         color: '#444444', 
@@ -241,29 +182,66 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
                     });
                 }
             });
-
-            // 2. UPDATE ASSIGNMENTS BASED ON TARGETS FROM RAWUSERS
-            newPool.forEach(agent => {
-                const sessionData = rawUsers[agent.id];
-                const targetId = sessionData?.target;
-
-                // Find if this targetId corresponds to a currently visible bubble
-                const targetBubble = bubbles.find(b => b.id === targetId || b.label === targetId);
-                
-                if (targetBubble && targetBubble.visible) {
-                    agent.assignedTo = targetBubble.id;
-                    agent.color = targetBubble.color;
-                } else {
-                    // Wander as grey if no target or target is not tracked
-                    agent.assignedTo = null;
-                    agent.color = '#444444';
-                }
-            });
         }
-
-        return [...newPool];
+        return newPool;
     });
-  }, [bubbles, capacity, rawUsers, demoMode]); 
+  }, [capacity, rawUsers, demoMode]); 
+
+  // --- EFFECT 2: ASSIGN TARGETS (Demo Mode Interval) ---
+  useEffect(() => {
+    if (!demoMode) return;
+
+    // Helper: Assign a single agent based on probability
+    const assignByProbability = (agent) => {
+        const rand = Math.random() * 100;
+        let cumulative = 0;
+        let target = null; // Default: Wander (Grey)
+        let color = '#444444';
+
+        for (let b of bubbles) {
+            // bubbles.count is now the Percentage (0-100)
+            const prob = b.count || 0;
+            cumulative += prob;
+            
+            if (rand < cumulative) {
+                target = b.id;
+                color = b.color;
+                break;
+            }
+        }
+        return { ...agent, assignedTo: target, color };
+    };
+
+    // The Interval Function
+    const refreshTargets = () => {
+        setAgents(prev => prev.map(agent => assignByProbability(agent)));
+    };
+
+    // 1. Run immediately when bubbles change to reflect new probabilities instantly
+    refreshTargets();
+
+    // 2. Set interval to shuffle them every 10 seconds
+    const interval = setInterval(refreshTargets, 10000);
+
+    return () => clearInterval(interval);
+  }, [demoMode, bubbles]); 
+
+  // --- EFFECT 3: ASSIGN TARGETS (Live Mode Reactive) ---
+  useEffect(() => {
+    if (demoMode) return;
+
+    setAgents(prev => prev.map(agent => {
+        const sessionData = rawUsers[agent.id];
+        const targetId = sessionData?.target;
+        const targetBubble = bubbles.find(b => b.id === targetId || b.label === targetId);
+        
+        if (targetBubble && targetBubble.visible) {
+            return { ...agent, assignedTo: targetBubble.id, color: targetBubble.color };
+        } else {
+            return { ...agent, assignedTo: null, color: '#444444' };
+        }
+    }));
+  }, [rawUsers, bubbles, demoMode]);
 
   return (
     <group>
