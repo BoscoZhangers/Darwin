@@ -43,6 +43,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
   useEffect(() => { sendSelection(); }, [sendSelection]);
 
+
   useEffect(() => {
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
@@ -54,6 +55,18 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
               null, 
               e.data.file 
           );
+      }
+
+      if (e.data.type === 'UPDATE_STYLE') {
+        console.log("Style")
+        handleUpdateLayout(
+          e.data.dataDarwinId,
+          e.data.x,
+          e.data.y,
+          null,
+          e.data.file || 'src/pages/Home.jsx',
+          {attr : e.data.attr, value : e.data.value}
+        )
       }
       if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
       if (e.data.type === 'LOG') console.log("[Preview Log]", e.data.message);
@@ -407,6 +420,7 @@ const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSe
 export default function Dashboard({ user, token, repo, onBack }) {
   const [viewMode, setViewMode] = useState('simulation'); 
   const [totalUsers, setTotalUsers] = useState(0);
+  const [totalDemoUsers, setTotalDemoUsers] = useState(0);
   const [rawUsers, setRawUsers] = useState({});
   const [clicksData, setClicksData] = useState({}); 
   const [aiLog, setAiLog] = useState([{ role: 'system', text: `Connected to ${repo?.full_name}` }]);
@@ -458,7 +472,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, []);
 
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
-  const handleStyleChange = (id, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', index: id, attr: prop, value}, '*'); } catch (e) {} };
+  const handleStyleChange = (id, label, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', dataDarwinId: label, attr: prop, value}, '*'); } catch (e) {} };
 
   const handleDeleteBubble = (id) => { if (activeId === id) setActiveId(null); setBubbles(prev => prev.filter(b => b.id !== id)); };
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
@@ -539,65 +553,113 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
   }, [demoMode, repo]);
 
+  function parseStyleInner(inner) {
+    let x = null;
+    let y = null;
+
+    let backgroundColor = { r: null, g: null, b: null };
+    let color = { r: null, g: null, b: null };
+
+    // ---------- Extract left ----------
+    const leftMatch = inner.match(/left\s*:\s*['"]?(\d+)?['"]?/);
+    if (leftMatch) {
+        x = parseInt(leftMatch[1], 10);
+        inner = inner.replace(leftMatch[0], "");
+    }
+
+    // ---------- Extract top ----------
+    const topMatch = inner.match(/top\s*:\s*['"]?(\d+)?['"]?/);
+    if (topMatch) {
+        y = parseInt(topMatch[1], 10);
+        inner = inner.replace(topMatch[0], "");
+    }
+
+    // ---------- Color parsing helper ----------
+    function parseColor(str) {
+        if (!str) return { r: null, g: null, b: null };
+
+        str = str.trim();
+
+        if (str.startsWith("#")) {
+            const hex = str.replace("#", "");
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+
+        if (str.startsWith("rgb")) {
+            const rgb = str.match(/\d+/g);
+            if (rgb) {
+                return {
+                    r: parseInt(rgb[0]),
+                    g: parseInt(rgb[1]),
+                    b: parseInt(rgb[2])
+                };
+            }
+        }
+
+        return { r: null, g: null, b: null };
+    }
+
+      // ---------- Extract backgroundColor ----------
+      const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
+      if (bgMatch) {
+          backgroundColor = parseColor(bgMatch[1]);
+          inner = inner.replace(bgMatch[0], "");
+      }
+
+      // ---------- Extract color ----------
+      const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
+      if (colorMatch) {
+          color = parseColor(colorMatch[1]);
+          inner = inner.replace(colorMatch[0], "");
+      }
+
+      // ---------- Clean commas ----------
+      inner = inner.replace(/,,+/g, ",");
+      inner = inner.replace(/^,|,$/g, "").trim();
+
+      // ---------- Convert remaining style to object ----------
+      const styleObject = {};
+
+      if (inner.length > 0) {
+          const pairs = inner.split(",");
+          pairs.forEach(pair => {
+              const [key, value] = pair.split(":");
+              try { 
+              if (key && value) {
+                  styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10);
+              }
+             } catch (e) {
+                console.error(e);
+              }
+          });
+      }
+
+      // ---------- Insert RGB objects ----------
+      styleObject.backgroundColor_R = backgroundColor.r ? backgroundColor.r : -1;
+      styleObject.backgroundColor_G = backgroundColor.g ? backgroundColor.g : -1;
+      styleObject.backgroundColor_B = backgroundColor.b ? backgroundColor.b : -1;
+      styleObject.color_R = color.r ? color.r : -1;
+      styleObject.color_G = color.g ? color.g : -1;
+      styleObject.color_B = color.b ? color.b : -1;
+
+      // console.log("PArse x", x)
+
+      return {
+          x,
+          y,
+          style: styleObject
+      };
+  }
+
   // --- UPDATE CODE ---
-  const handleUpdateLayout = useCallback((id, newX, newY, newHeight, filePathArg) => { 
+  const handleUpdateLayout = useCallback((id, newX, newY, newHeight, filePathArg, extra_style_update=false) => { 
     setBubbles(prev => prev.map(b => 
        b.id === id ? { ...b, position: [newX, newHeight ?? b.position[1], newY] } : b
     ));
-
-    if (demoMode) {
-      // 1. Identify File
-      const bubble = bubbles.find(b => b.id === id);
-      const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
-
-      // 2. Update Code
-      setFileContents(prev => {
-        const code = prev[filePath];
-        if (!code) return prev; 
-
-        // --- NEW FIX: TOLERANT REGEX FOR ARROW FUNCTIONS => ---
-        // Matches the tag start, the ID, and ignores '>' if they are part of '=>'
-        const regex = new RegExp(`(<(?:[^>]|=>)*\\bdata-darwin-id=["']${id}["'](?:[^>]|=>)*>)`, 'g');
-
-        const newCode = code.replace(regex, (matchTag) => {
-             if (matchTag.match(/style={{/)) {
-                 return matchTag.replace(/style={{([\s\S]*?)}}/, (fullStyle, innerStyle) => {
-                     let updatedStyle = innerStyle;
-                     
-                     const setStyle = (prop, val) => {
-                        // Regex allows decimals and quotes
-                        const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
-                        if (propRegex.test(updatedStyle)) {
-                           updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
-                        } else {
-                           updatedStyle += `, ${prop}: '${val}'`;
-                        }
-                     };
-
-                     setStyle('left', newX + 'px');
-                     setStyle('top', newY + 'px');
-                     if (!updatedStyle.includes('position')) {
-                        updatedStyle += `, position: 'absolute'`;
-                     }
-                     return `style={{${updatedStyle}}}`;
-                 });
-             } else {
-                 const styleString = ` style={{ position: 'absolute', left: '${newX}px', top: '${newY}px' }}`;
-                 
-                 // --- NEW FIX: SAFE INJECTION AT END OF TAG ---
-                 // Instead of searching for the first '>', we use regex anchors to find the true end
-                 if (matchTag.trim().endsWith('/>')) {
-                     return matchTag.replace(/\/>$/, `${styleString} />`);
-                 } else {
-                     return matchTag.replace(/>$/, `${styleString}>`);
-                 }
-             }
-        });
-
-        if (newCode === code) return prev;
-        return { ...prev, [filePath]: newCode };
-      });
-    }
 
     const fetchBackendCount = async () => { 
       try { 
@@ -606,7 +668,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
            const mockIds = ["nav-main", "hero-text", "btn-cta", "description", "btn-cta-2"];
            if(mockIds[div_id]) div_id = mockIds[div_id];
         }
-        const payload = { x: newX, y: newY, div_id: div_id, predict_other: {} };
+        const payload = { x: newX || 50, y: newY || 250, div_id: div_id, predict_other: predict_other };
         const resp = await fetch(APP_HOST + BACKEND_PORT + '/api/get_hit_count', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
@@ -615,13 +677,121 @@ export default function Dashboard({ user, token, repo, onBack }) {
         if (!resp.ok) return;
         const json = await resp.json(); 
         if (typeof json?.count === 'number') {
-            setBubbles(prev => prev.map(b => b.label === div_id ? { ...b, count : json?.count} : b));
+            setBubbles(prev => {
+              const updated = prev.map(b => b.label === div_id ? { ...b, count : json?.count} : b);
+              
+              const total = updated.reduce((sum, b) => sum + (b.count || 0), 0);
+              setTotalDemoUsers(total);
+              
+              return updated;
+            });
         }
       } catch (e) { console.error(e); } 
     }; 
-    
-    if (demoMode) fetchBackendCount(); 
-  }, [demoMode, bubbles]); 
+
+    if (demoMode) {
+      // 1. Identify File
+      const bubble = bubbles.find(b => b.id === id);
+      const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
+      var predict_other = {};
+
+      // 2. Update Code
+      setFileContents(prev => {
+        const code = prev[filePath];
+        if (!code) return prev; 
+
+        var newCode = code;
+        
+        if (extra_style_update) {
+          const { attr, value } = extra_style_update;
+          const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
+          newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
+            let shouldUpdate = false;
+            const idToMatch = id;
+            const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + idToMatch + '["\']');
+            const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + idToMatch + '["\']');
+            if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
+            if (shouldUpdate) {
+              let newProps = props;
+              const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
+              if (attrEqRegex.test(newProps)) {
+                newProps = newProps.replace(attrEqRegex, `${mappedAttr}="${value}"`);
+              } else {
+                const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
+                const styleMatch = newProps.match(styleObjRegex);
+                if (styleMatch) {
+                  let inner = styleMatch[1];
+                  const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
+                  if (stylePropRegex.test(inner)) inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
+                  else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
+                  inner = inner.replace(/''/g, "");
+                  var {x, y, style} = parseStyleInner(inner);
+                  newX = x;
+                  newY = y;
+                  newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`)
+                  // console.log(x)
+                  predict_other = style;
+                }
+              }
+              return `<${tag}${newProps}>`;
+            }
+            return fullMatch;
+          })
+        }
+
+        // --- NEW FIX: TOLERANT REGEX FOR ARROW FUNCTIONS => ---
+        // Matches the tag start, the ID, and ignores '>' if they are part of '=>'
+        const regex = new RegExp(`(<(?:=>|[^>])*\\bdata-darwin-id=["']${id}["'](?:=>|[^>])*>)`, 'g');
+        
+        if (newX != undefined && newY != undefined) {
+          newCode = newCode.replace(regex, (matchTag) => {
+              console.log(matchTag);
+              if (matchTag.match(/style={{/)) {
+                  return matchTag.replace(/style={{([\s\S]*?)}}/, (fullStyle, innerStyle) => {
+                      let updatedStyle = innerStyle;
+                      
+                      const setStyle = (prop, val) => {
+                          // Regex allows decimals and quotes
+                          const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
+                          if (propRegex.test(updatedStyle)) {
+                            updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
+                          } else {
+                            updatedStyle += `, ${prop}: '${val}'`;
+                          }
+                      };
+
+                      setStyle('left', newX + 'px');
+                      setStyle('top', newY + 'px');
+                      if (!updatedStyle.includes('position')) {
+                          updatedStyle += `, position: 'absolute'`;
+                      }
+                      return `style={{${updatedStyle}}}`;
+                  });
+              } else {
+                  const styleString = ` style={{ position: 'absolute', left: '${newX}px', top: '${newY}px' }}`;
+
+                  // --- NEW FIX: SAFE INJECTION AT END OF TAG ---
+                  // Instead of searching for the first '>', we use regex anchors to find the true end
+                  if (matchTag.trim().endsWith('/>')) {
+                      return matchTag.replace(/\/>$/, `${styleString} />`);
+                  } else {
+                      return matchTag.replace(/>$/, `${styleString}>`);
+                  }
+              }
+          });
+        }
+        fetchBackendCount(); 
+
+        if (newCode === code) return prev;
+        return { ...prev, [filePath]: newCode };
+      });
+    }
+    }, [demoMode, bubbles]); 
+
+  useEffect(() => {
+    const total = bubbles.reduce((sum, b) => sum + (b.count || 0), 0);
+    setTotalDemoUsers(total);
+  }, [bubbles])
 
   useEffect(() => {
     if (!extractedGhost) return;
@@ -763,7 +933,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
           <div className="relative w-full h-full group">
              <Scene 
                 bubbles={bubbles} 
-                userCount={demoMode ? 50 : totalUsers} 
+                userCount={demoMode ? totalDemoUsers : totalUsers} 
                 activeId={activeId} 
                 setActiveId={setActiveId} 
                 darkMode={darkMode} 
@@ -807,7 +977,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                 <div className="bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 pl-6 pr-2 py-2 rounded-full flex items-center gap-6 shadow-2xl transition-colors">
                    <div className="flex items-center gap-3 pr-4 border-r border-gray-300 dark:border-white/10">
                       <Users size={16} className="text-gray-500" />
-                      <div className="flex items-baseline gap-2"><span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Active Swarm</span><span className="text-lg font-mono text-neon-blue leading-none">{demoMode ? '92' : totalUsers}</span></div>
+                      <div className="flex items-baseline gap-2"><span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Active Swarm</span><span className="text-lg font-mono text-neon-blue leading-none">{demoMode ? totalDemoUsers : totalUsers}</span></div>
                    </div>
                    <div className="flex items-center gap-1">
                         <button onClick={handleClearEnvironment} className="p-2 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-full text-gray-400 hover:text-red-500" title="Clear"><Trash2 size={16} /></button>
@@ -949,14 +1119,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                        <input
                                          type="number"
                                          value={b.meta?.width ? parseInt(b.meta.width) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'width', v); }}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'width', v); }}
                                          className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
                                        />
                                        <span className="text-gray-500">x</span>
                                        <input
                                          type="number"
                                          value={b.meta?.height ? parseInt(b.meta.height) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, 'height', v); }}
+                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'height', v); }}
                                          className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
                                        />
                                      </div>
@@ -965,7 +1135,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                    <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1"><Palette size={10}/> Color</div>
                                       <div className="flex items-center gap-2">
-                                        <input type="color" value={colorToHex(b.meta?.bgColor)} onChange={(e) => handleStyleChange(b.id, 'bgColor', e.target.value)} className="w-8 h-8 p-0 border border-gray-300 dark:border-white/10 rounded" />
+                                        <input type="color" value={colorToHex(b.meta?.bgColor)} onChange={(e) => handleStyleChange(b.id, b.label, 'bgColor', e.target.value)} className="w-8 h-8 p-0 border border-gray-300 dark:border-white/10 rounded" />
                                         <div className="w-3 h-3 rounded-full border border-gray-300 dark:border-white/20" style={{backgroundColor: b.meta?.bgColor}}></div>
                                         <span className="font-mono ml-2">{b.meta?.color}</span>
                                       </div>

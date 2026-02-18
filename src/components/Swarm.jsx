@@ -202,7 +202,7 @@ export default function Scene({ bubbles, userCount, activeId, setActiveId, darkM
 
         <Crowd 
           bubbles={bubbles} 
-          capacity={userCount || 50} 
+          capacity={userCount || 0} 
           bubbleRefs={bubbleRefs} 
           rawUsers={rawUsers}
           userTargets={userTargets}

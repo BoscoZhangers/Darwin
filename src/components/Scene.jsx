@@ -219,7 +219,7 @@ export default function Scene({ bubbles = [], userCount, activeId, setActiveId, 
           <Vignette eskil={false} offset={0} darkness={darkMode ? 0.8 : 0.4} />
         </EffectComposer>
         <CameraRig focusedBubble={focusedBubble} bubbleRefs={bubbleRefs} />
-        <Crowd bubbles={bubbles} capacity={userCount || 50} bubbleRefs={bubbleRefs} rawUsers={rawUsers} userTargets={userTargets} demoMode={demoMode} />
+        <Crowd bubbles={bubbles} capacity={userCount || 0} bubbleRefs={bubbleRefs} rawUsers={rawUsers} userTargets={userTargets} demoMode={demoMode} />
         {(bubbles || []).map((b) => {
           if (!b.visible) return null;
           return (

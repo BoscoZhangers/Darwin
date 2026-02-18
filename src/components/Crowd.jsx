@@ -133,7 +133,7 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
 };
 
 // --- The Unified Swarm Controller ---
-export default function Crowd({ bubbles = [], capacity = 50, bubbleRefs, rawUsers = {}, demoMode = true }) {
+export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers = {}, demoMode = true }) {
   const [agents, setAgents] = useState([]);
 
   useEffect(() => {
