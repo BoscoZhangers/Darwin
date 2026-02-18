@@ -124,6 +124,10 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       const [pos, setPos] = useState({ x: 0, y: 0 }); 
       const [isDragging, setIsDragging] = useState(false); 
       const dragMeta = useRef({ startX: 0, startY: 0, initialRelX: 0, initialRelY: 0 });
+      
+      // --- NEW: Drag vs Click detection ---
+      const isDragOp = useRef(false);
+      const startPos = useRef({ x: 0, y: 0 });
 
       useEffect(() => {
         const handleMsg = (e) => {
@@ -136,11 +140,30 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         return () => window.removeEventListener('message', handleMsg);
       }, [_darwinIndex, hasId]);
 
+      // --- NEW: Global move listener to detect drag distance ---
+      useEffect(() => {
+        const handleGlobalMove = (e) => {
+            const dx = Math.abs(e.clientX - startPos.current.x);
+            const dy = Math.abs(e.clientY - startPos.current.y);
+            if (dx > 5 || dy > 5) {
+                isDragOp.current = true;
+            }
+        };
+        window.addEventListener('mousemove', handleGlobalMove);
+        return () => window.removeEventListener('mousemove', handleGlobalMove);
+      }, []);
+
       const handleMouseDown = (e) => { 
         e.stopPropagation(); 
         
+        // Reset drag detection
+        isDragOp.current = false;
+        startPos.current = { x: e.clientX, y: e.clientY };
+        
         if ('${mode}' === 'live') { 
-          e.preventDefault();
+          // Note: We removed e.preventDefault() here to allow clicks, 
+          // but we will intercept them in onClickCapture if it was a drag.
+          
           const rect = e.target.getBoundingClientRect(); 
           const computed = window.getComputedStyle(e.target); 
           const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag, file: _darwinFile }; 
@@ -165,6 +188,13 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
             setIsDragging(true);
         }
       }; 
+
+      const handleClickCapture = (e) => {
+          if (isDragOp.current) {
+              e.preventDefault();
+              e.stopPropagation();
+          }
+      };
 
       useEffect(() => { 
         if (!isDragging || '${mode}' === 'live') return; 
@@ -195,7 +225,9 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       };
 
       if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; 
-      return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} {...props}>{children}</Tag>; 
+      
+      // Added onClickCapture to intercept clicks after drag
+      return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} onClickCapture={handleClickCapture} {...props}>{children}</Tag>; 
     };
 
     const EXTERNALS = { 

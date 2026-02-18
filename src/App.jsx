@@ -203,7 +203,7 @@ const FeaturesShowcase = () => {
             <p className="text-gray-400 text-lg leading-relaxed">
               Understand how users interact with your components before you launch. 
               Our predictive models generate heatmaps and click-density charts  
-              to optimize engagement.
+              to help you optimize engagement.
             </p>
           </div>
           <div className="flex-1 w-full">
@@ -226,7 +226,7 @@ const FeaturesShowcase = () => {
             <p className="text-gray-400 text-lg leading-relaxed">
               Modify your React components directly in the browser. 
               Drag elements to new positions  and watch the code update instantly 
-              via our bi-directional sync engine.
+              with our bi-directional sync engine.
             </p>
           </div>
           <div className="flex-1 w-full">
