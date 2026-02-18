@@ -39,7 +39,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       }
 
       if (e.data.type === 'UPDATE_STYLE') {
-        console.log("Style")
+        // console.log("Style")
         handleUpdateLayout(
           e.data.dataDarwinId,
           e.data.x,
@@ -758,7 +758,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         
         if (newX != undefined && newY != undefined) {
           newCode = newCode.replace(regex, (matchTag) => {
-              console.log(matchTag);
+              // console.log(matchTag);
               if (matchTag.match(/style={{/)) {
                   return matchTag.replace(/style={{([\s\S]*?)}}/, (fullStyle, innerStyle) => {
                       let updatedStyle = innerStyle;
@@ -906,7 +906,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [token, repo]);
   const handleAcceptAi = () => {
       if (proposedCode) {
-          setFileContents(prev => ({ ...prev, ['src/App.jsx']: proposedCode }));
+          setFileContents(prev => ({ ...prev, ['src/pages/Home.jsx']: proposedCode }));
           setProposedCode(null);
           setAiPrompt("");
           setAiLog(prev => [...prev, { role: 'success', text: 'AI Changes Applied' }]);
@@ -992,7 +992,59 @@ export default function Dashboard({ user, token, repo, onBack }) {
       setIsSaving(false);
     }
   };
-  const handleAiGenerate = async () => {};
+
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    
+    // Safety check: Ensure the URL is formed correctly
+    const apiUrl = `${APP_HOST}${PORT}/api/generate_code`;
+    
+    try {
+        const currentCode = fileContents['src/pages/Home.jsx'] || '';
+        
+        setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
+
+        // console.log(aiPrompt)
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: aiPrompt,
+                code: currentCode
+            })
+        });
+
+        if (!resp.ok) {
+            const errorData = await resp.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server responded with ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        if (data.code) {
+            setProposedCode(data.code);
+            setAiLog(prev => [...prev, { role: 'success', text: 'AI generated a new version of App.jsx. Review above!' }]);
+        } else {
+            throw new Error("AI returned empty code.");
+        }
+
+    } catch (err) {
+        console.error("AI Assistant Error:", err);
+        
+        // Detailed error logging for the UI
+        let errorMessage = "AI Generation Failed.";
+        if (err.message.includes("Failed to fetch")) {
+            errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
+        } else {
+            errorMessage = `AI Error: ${err.message}`;
+        }
+
+        setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
+        setActivePanel('logs'); // Auto-switch to logs so you see the error
+    } finally {
+        setIsAiGenerating(false);
+    }
+  };
 
   return (
     <div className={`h-screen w-screen bg-white dark:bg-black text-gray-900 dark:text-white flex overflow-hidden font-sans transition-colors duration-300 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
