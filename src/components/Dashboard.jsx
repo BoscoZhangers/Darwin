@@ -916,7 +916,82 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleCodeChange = (path, newCode) => { setFileContents(prev => ({ ...prev, [path]: newCode })); };
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
-  const handleCommitChanges = async () => {};
+  const handleCommitChanges = async () => {
+    // 1. Safety check
+    if (Object.keys(fileContents).length === 0) return;
+    
+    setIsSaving(true);
+    const octokit = new Octokit({ auth: token });
+    
+    try {
+      // 2. Get latest commit and base tree
+      const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
+        owner: repo.owner.login,
+        repo: repo.name,
+        ref: `heads/${repo.default_branch}`,
+      });
+      const latestCommitSha = refData.object.sha;
+
+      const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', {
+        owner: repo.owner.login,
+        repo: repo.name,
+        commit_sha: latestCommitSha,
+      });
+      const baseTreeSha = commitData.tree.sha;
+
+      // 3. Prepare blobs for ALL text files in fileContents
+      // We filter out images to avoid corrupting them (since they are stored as Data URIs in state)
+      const filesToUpload = Object.entries(fileContents).filter(([path]) => !isImageFile(path));
+      
+      const newTreeItems = await Promise.all(filesToUpload.map(async ([path, content]) => {
+        const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
+          owner: repo.owner.login,
+          repo: repo.name,
+          content: content,
+          encoding: 'utf-8',
+        });
+        
+        return {
+          path: path,
+          mode: '100644',
+          type: 'blob',
+          sha: blobData.sha,
+        };
+      }));
+
+      // 4. Create a new tree with ALL changes
+      const { data: newTreeData } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
+        owner: repo.owner.login,
+        repo: repo.name,
+        base_tree: baseTreeSha,
+        tree: newTreeItems,
+      });
+
+      // 5. Create commit
+      const { data: newCommitData } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
+        owner: repo.owner.login,
+        repo: repo.name,
+        message: `Update ${newTreeItems.length} files via Darwin`,
+        tree: newTreeData.sha,
+        parents: [latestCommitSha],
+      });
+
+      // 6. Push
+      await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
+        owner: repo.owner.login,
+        repo: repo.name,
+        ref: `heads/${repo.default_branch}`,
+        sha: newCommitData.sha,
+      });
+
+      setAiLog(prev => [...prev, { role: 'success', text: `Successfully pushed ${newTreeItems.length} files.` }]);
+    } catch (error) {
+      console.error(error);
+      setAiLog(prev => [...prev, { role: 'error', text: `Failed to push: ${error.message}` }]);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const handleAiGenerate = async () => {};
 
   return (

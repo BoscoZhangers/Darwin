@@ -7,6 +7,7 @@ import { subscribeToAuth, signInWithGithub, signOut } from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
+import vid2 from './assets/vid2.mov';
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
@@ -203,7 +204,7 @@ const FeaturesShowcase = () => {
             <p className="text-gray-400 text-lg leading-relaxed">
               Understand how users interact with your components before you launch. 
               Our predictive models generate heatmaps and click-density charts  
-              to help you optimize engagement.
+              to optimize engagement.
             </p>
           </div>
           <div className="flex-1 w-full">
@@ -226,14 +227,19 @@ const FeaturesShowcase = () => {
             <p className="text-gray-400 text-lg leading-relaxed">
               Modify your React components directly in the browser. 
               Drag elements to new positions  and watch the code update instantly 
-              with our bi-directional sync engine.
+              via our bi-directional sync engine.
             </p>
           </div>
           <div className="flex-1 w-full">
             <div className="aspect-video bg-gray-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-               <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50">
-                <span className="text-gray-500 font-mono text-xs uppercase tracking-widest">Visual Editor Interface</span>
-              </div>
+               <video 
+                 src={vid2} 
+                 autoPlay 
+                 loop 
+                 muted 
+                 playsInline 
+                 className="w-full h-full object-cover"
+               />
             </div>
           </div>
         </div>
