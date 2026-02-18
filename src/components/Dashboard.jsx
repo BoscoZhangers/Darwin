@@ -6,31 +6,12 @@ import AnalyticsPanel from './AnalyticsPanel';
 import HistoryPanel from './HistoryPanel';
 import { subscribeToSwarm } from '../lib/firebase';
 import {APP_HOST, BACKEND_PORT, PORT} from "../constants";
+import logo from '../assets/logo.png';
 
 const NEON_PALETTE = ["#00f3ff", "#bc13fe", "#ff0055", "#ccff00", "#ffaa00", "#00ff99", "#ff00ff", "#0099ff"];
 const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|aside|p|span|ul|li|a|img|form|input";
 
 const isImageFile = (path) => /\.(svg|png|jpe?g|gif|ico|webp)$/i.test(path);
-
-// --- CUSTOM LOGO ---
-const ChunkyDnaLogo = ({ className, style }) => (
-  <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} style={style}>
-    <defs>
-      <linearGradient id="capsule-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#00C9FF" />
-        <stop offset="100%" stopColor="#925EFF" />
-      </linearGradient>
-    </defs>
-    <g stroke="url(#capsule-gradient)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M38 12 C 35 15, 32 19, 32 22 C 32 26, 36 29, 38 26" />
-      <path d="M44 20 C 42 24, 42 28, 42 30 C 42 34, 45 36, 47 38" />
-      <path d="M16 42 C 18 39, 22 37, 26 36 C 30 35, 34 35, 38 37" />
-      <path d="M22 49 C 25 47, 29 46, 32 46 C 36 46, 40 47, 43 49" />
-      <path d="M29 53 C 27 50, 24 47, 23 43 C 22 40, 23 37, 25 34" />
-      <path d="M35 46 C 34 42, 33 39, 33 35 C 33 32, 35 29, 38 27" />
-    </g>
-  </svg>
-);
 
 const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
   const iframeRef = useRef(null);
@@ -133,7 +114,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
     }
 
     const { useState, useEffect, useRef } = React;
-    
+     
     const InteractiveElement = ({ _tag: Tag, _darwinIndex, _darwinFile, children, style, ...props }) => { 
       const isAbsolute = style && style.position === 'absolute'; 
       const hasId = props['data-darwin-id'] || props.id; 
@@ -245,9 +226,9 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         increment: (val) => firebase.database.ServerValue.increment(val)
       }
     };
-    
+     
     function resolvePath(base, relative) { if (!relative.startsWith('.')) return relative; const stack = base.split('/'); stack.pop(); const parts = relative.split('/'); for (let i = 0; i < parts.length; i++) { if (parts[i] === '.') continue; if (parts[i] === '..') stack.pop(); else stack.push(parts[i]); } let path = stack.join('/'); if (files[path]) return path; if (files[path + '.jsx']) return path + '.jsx'; if (files[path + '.js']) return path + '.js'; const imgExts = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']; for (let ext of imgExts) { if (files[path + ext]) return path + ext; } return path; }
-    
+     
     function require(currentPath, importPath) { 
       if (EXTERNALS[importPath]) return EXTERNALS[importPath];
       
@@ -299,7 +280,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
 
 const EditorWorkspace = ({ fileTree, openTabs, activeTab, fileContents, onFileSelect, onTabClose, onTabClick, onCodeChange, onSave, loadingFile, isSaving }) => { 
-  const [expandedFolders, setExpandedFolders] = useState(new Set(['src', 'components'])); 
+  const [expandedFolders, setExpandedFolders] = useState(new Set(['src', 'components']));
   
   const textareaRef = useRef(null);
   const codeBgRef = useRef(null);
@@ -632,7 +613,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
               if (key && value) {
                   styleObject[key.trim()] = parseInt(value.trim().replace(/^['"]|['"]$/g, "").replace("px", ""), 10);
               }
-             } catch (e) {
+              } catch (e) {
                 console.error(e);
               }
           });
@@ -910,9 +891,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
     <div className={`h-screen w-screen bg-white dark:bg-black text-gray-900 dark:text-white flex overflow-hidden font-sans transition-colors duration-300 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
       {/* ... Left Sidebar (Same as before) ... */}
       <div className="w-16 border-r border-gray-200 dark:border-white/5 flex flex-col items-center py-6 gap-6 z-30 bg-gray-50 dark:bg-[#0a0a0a] shrink-0 transition-colors duration-300">
-        <div className="relative w-10 h-10 bg-[#111] dark:bg-black rounded-xl flex items-center justify-center border border-white/10 shadow-lg">
-           <ChunkyDnaLogo className="w-6 h-6" />
-        </div>
+        <img src={logo} className="w-10 h-10" alt="Logo" />
         <div className="flex flex-col gap-4">
             <button onClick={() => setViewMode('simulation')} className={`p-3 rounded-xl transition-all ${viewMode === 'simulation' ? 'text-neon-blue bg-blue-50 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Layers size={20} /></button>
             <button onClick={() => setViewMode('analytics')} className={`p-3 rounded-xl transition-all ${viewMode === 'analytics' ? 'text-yellow-500 bg-yellow-50 dark:text-yellow-400 dark:bg-transparent' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><BarChart2 size={20} /></button>
@@ -1020,14 +999,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
               <div className="flex-1 bg-white relative">
                  {isResizing && <div className="absolute inset-0 z-50 bg-transparent" />}
                  <IframeRenderer 
-                    files={fileContents} 
-                    proposedCode={proposedCode}
-                    onUpdateCode={handleCodeUpdateFromPreview} 
-                    handleUpdateLayout={handleUpdateLayout} 
-                    mode={demoMode ? 'edit' : 'live'} 
-                    onExtractStart={handleExtractStart} 
-                    activeId={activeId}
-                    activeColor={getActiveColor()}
+                   files={fileContents} 
+                   proposedCode={proposedCode}
+                   onUpdateCode={handleCodeUpdateFromPreview} 
+                   handleUpdateLayout={handleUpdateLayout} 
+                   mode={demoMode ? 'edit' : 'live'} 
+                   onExtractStart={handleExtractStart} 
+                   activeId={activeId}
+                   activeColor={getActiveColor()}
                  />
               </div>
            </div>
@@ -1104,7 +1083,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                  </div>
                                  <div className="flex items-center gap-1">
                                     <button onClick={(e) => { e.stopPropagation(); toggleVisibility(b.id); }} className="text-gray-400 hover:text-black dark:text-gray-500 dark:hover:text-white p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10">
-                                       {b.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        {b.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                                     </button>
                                     <button onClick={(e) => { e.stopPropagation(); handleDeleteBubble(b.id); }} className="text-gray-400 hover:text-red-500 dark:text-gray-500 p-1 ml-2 transition-colors" title="Delete Tracker"><Trash2 size={12} /></button>
                                  </div>
@@ -1117,17 +1096,17 @@ export default function Dashboard({ user, token, repo, onBack }) {
                                      <div className="flex items-center gap-1"><Move size={10}/> Dimensions</div>
                                      <div className="flex items-center gap-2">
                                        <input
-                                         type="number"
-                                         value={b.meta?.width ? parseInt(b.meta.width) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'width', v); }}
-                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                          type="number"
+                                          value={b.meta?.width ? parseInt(b.meta.width) : ''}
+                                          onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'width', v); }}
+                                          className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
                                        />
                                        <span className="text-gray-500">x</span>
                                        <input
-                                         type="number"
-                                         value={b.meta?.height ? parseInt(b.meta.height) : ''}
-                                         onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'height', v); }}
-                                         className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
+                                          type="number"
+                                          value={b.meta?.height ? parseInt(b.meta.height) : ''}
+                                          onChange={(e) => { const v = e.target.value ? `${e.target.value}px` : ''; handleStyleChange(b.id, b.label, 'height', v); }}
+                                          className="w-20 p-1 rounded border border-gray-300 dark:border-white/10 text-black dark:text-white bg-white dark:bg-transparent text-[10px]"
                                        />
                                      </div>
                                    </div>
