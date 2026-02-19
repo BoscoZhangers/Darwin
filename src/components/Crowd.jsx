@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Vector3, Quaternion, Euler, Color, MeshStandardMaterial } from 'three';
 
 // --- A Single "Bubble" Character ---
-const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) => {
+const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, sharedPositions }) => {
   const group = useRef();
   
   // Limbs
@@ -22,20 +22,44 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
     });
   }, []);
 
+  // Cleanup shared position when unmounted
+  useEffect(() => {
+    return () => {
+        if (sharedPositions.current) {
+            delete sharedPositions.current[id];
+        }
+    };
+  }, [id, sharedPositions]);
+
   // Internal state for wandering logic
   const wanderTarget = useRef(new Vector3(
-    (Math.random() - 0.5) * 50, 
+    startPos[0] + (Math.random() - 0.5) * 10, 
     0, 
-    (Math.random() - 0.5) * 40
+    startPos[2] + (Math.random() - 0.5) * 10
   ));
   
-  const speed = 0.08 + speedOffset * 0.05; 
+  // --- THE FIX: Stable Random Target Offset ---
+  // Calculates once when they pick a target, doesn't change if someone else leaves
+  const targetOffset = useMemo(() => {
+    const angle = Math.random() * Math.PI * 2;
+    // Disperse them in a radius of 0.8 to 2.5 around the component
+    const radius = Math.random() * 1.7 + 0.8; 
+    return new Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+  }, [assignedTo]); 
+
+  const speed = 0.05 + speedOffset * 0.04; 
   const targetColor = useMemo(() => new Color(color), [color]);
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
     if (!group.current) return;
 
     const current = group.current.position;
+    
+    // Broadcast position to swarm for collision detection
+    if (sharedPositions.current) {
+        sharedPositions.current[id] = current;
+    }
+
     const target = new Vector3();
     const isWandering = !assignedTo;
 
@@ -60,45 +84,67 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
         const bubbleObj = bubbleRefs.current[assignedTo];
         if (bubbleObj) {
             bubbleObj.getWorldPosition(target); 
+            // Add their unique stable offset so they don't all target the dead center
+            target.add(targetOffset);
         } else {
             target.copy(current);
         }
-
-        // --- TIGHT SPIRAL PACKING (No Overlap) ---
-        const SPACING = 0.6; 
-        const angle = index * 2.39996; // Golden Angle
-        const radius = SPACING * Math.sqrt(index); 
-
-        target.x += Math.cos(angle) * radius;
-        target.z += Math.sin(angle) * radius;
     }
 
-    // --- 2. MOVEMENT LOGIC (WITH SNAP) ---
+    // --- 2. MOVEMENT LOGIC (WITH COLLISION AVOIDANCE) ---
     const distToTarget = current.distanceTo(target);
-    const stopThreshold = 0.1; 
+    const stopThreshold = 0.15; 
     let isMoving = false;
+    let moveDir = new Vector3();
 
-    if (distToTarget > stopThreshold) {
-        // Move towards target
-        const moveVector = target.clone().sub(current).normalize().multiplyScalar(speed);
+    // BOIDS SEPARATION (Collision Avoidance)
+    const separation = new Vector3();
+    let neighbors = 0;
+    
+    for (const otherId in sharedPositions.current) {
+        if (otherId === id) continue;
+        const otherPos = sharedPositions.current[otherId];
+        if (!otherPos) continue;
+        
+        const dist = current.distanceTo(otherPos);
+        // If another humanoid is closer than 1.0 units, push away
+        if (dist > 0 && dist < 1.0) {
+            const push = current.clone().sub(otherPos).normalize().divideScalar(dist);
+            separation.add(push);
+            neighbors++;
+        }
+    }
+
+    // Move if we are far from our spot, OR if we are being bumped by someone
+    if (distToTarget > stopThreshold || neighbors > 0) {
+        let dir = new Vector3();
+        
+        if (distToTarget > stopThreshold) {
+            dir = target.clone().sub(current).normalize();
+        }
+        
+        if (neighbors > 0) {
+            separation.multiplyScalar(0.4); // Repulsion strength
+            dir.add(separation).normalize();
+        }
+
+        moveDir.copy(dir); 
+        
+        const moveVector = dir.multiplyScalar(speed);
         group.current.position.add(moveVector);
         isMoving = true;
-    } else {
-        // Snap to exact position
-        if (!isWandering) {
-            group.current.position.lerp(target, 0.2); 
-        }
-        isMoving = false; 
     }
 
     // --- 3. ROTATION & ANIMATION ---
     if (isMoving) {
-        // Face the target
-        const angle = Math.atan2(target.x - current.x, target.z - current.z);
-        const q = new Quaternion().setFromEuler(new Euler(0, angle, 0));
-        group.current.quaternion.slerp(q, 0.1);
+        // Face the exact direction of movement
+        if (moveDir.lengthSq() > 0.001) {
+            const angle = Math.atan2(moveDir.x, moveDir.z);
+            const q = new Quaternion().setFromEuler(new Euler(0, angle, 0));
+            group.current.quaternion.slerp(q, 0.15);
+        }
         
-        // Run Animation (Limbs moving, Body bobbing)
+        // Run Animation
         const t = state.clock.elapsedTime * 15 + speedOffset * 10;
         if(leftArm.current) leftArm.current.rotation.x = Math.sin(t) * 0.6;
         if(rightArm.current) rightArm.current.rotation.x = -Math.sin(t) * 0.6;
@@ -106,11 +152,8 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
         if(rightLeg.current) rightLeg.current.rotation.x = Math.sin(t) * 0.8;
         group.current.position.y = Math.abs(Math.sin(t)) * 0.1;
     } else {
-        // --- STOPPED (Fixed in Place) ---
-        // 1. Reset Height (No bobbing)
+        // Stopped completely, stay put
         group.current.position.y = 0;
-        
-        // 2. Reset Limbs to Neutral
         if(leftLeg.current) leftLeg.current.rotation.x = 0;
         if(rightLeg.current) rightLeg.current.rotation.x = 0;
         if(leftArm.current) leftArm.current.rotation.x = 0; 
@@ -135,6 +178,9 @@ const Agent = ({ index, startPos, assignedTo, bubbleRefs, color, speedOffset }) 
 // --- The Unified Swarm Controller ---
 export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers = {}, demoMode = true }) {
   const [agents, setAgents] = useState([]);
+  
+  // Shared ref holding live coordinates for all humanoids so they don't walk into each other
+  const sharedPositions = useRef({});
 
   // --- EFFECT 1: RESIZE POOL (Reactive) ---
   useEffect(() => {
@@ -142,12 +188,9 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
         let newPool = [...currentAgents];
 
         if (demoMode) {
-            // DEMO MODE: STRICTLY MATCH CAPACITY
             if (newPool.length > capacity) {
-                // Downscale: Remove agents (prefer those wandering, then simple slice)
                 newPool = newPool.slice(0, capacity);
             } else if (newPool.length < capacity) {
-                // Upscale: Add new agents (start them as wanderers)
                 const deficit = capacity - newPool.length;
                 for(let i=0; i<deficit; i++) {
                     const angle = Math.random() * Math.PI * 2;
@@ -158,17 +201,14 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
                         assignedTo: null,
                         color: '#444444', 
                         speedOffset: Math.random(),
+                        nextUpdate: Date.now() + Math.random() * 5000,
                     });
                 }
             }
         } else {
-            // LIVE MODE: SYNC WITH ACTIVE SESSIONS
             const activeSessionIds = Object.keys(rawUsers);
-            
-            // Remove inactive
             newPool = newPool.filter(a => activeSessionIds.includes(a.id));
             
-            // Add new
             activeSessionIds.forEach(sessionId => {
                 if (!newPool.find(a => a.id === sessionId)) {
                     const angle = Math.random() * Math.PI * 2;
@@ -191,15 +231,13 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
   useEffect(() => {
     if (!demoMode) return;
 
-    // Helper: Assign a single agent based on probability
     const assignByProbability = (agent) => {
         const rand = Math.random() * 100;
         let cumulative = 0;
-        let target = null; // Default: Wander (Grey)
+        let target = null;
         let color = '#444444';
 
         for (let b of bubbles) {
-            // bubbles.count is now the Percentage (0-100)
             const prob = b.count || 0;
             cumulative += prob;
             
@@ -209,19 +247,26 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
                 break;
             }
         }
-        return { ...agent, assignedTo: target, color };
+        
+        const nextUpdate = Date.now() + 5000 + Math.random() * 10000;
+        return { ...agent, assignedTo: target, color, nextUpdate };
     };
 
-    // The Interval Function
-    const refreshTargets = () => {
-        setAgents(prev => prev.map(agent => assignByProbability(agent)));
-    };
-
-    // 1. Run immediately when bubbles change to reflect new probabilities instantly
-    refreshTargets();
-
-    // 2. Set interval to shuffle them every 10 seconds
-    const interval = setInterval(refreshTargets, 10000);
+    const interval = setInterval(() => {
+        const now = Date.now();
+        setAgents(prev => {
+            let changed = false;
+            const nextAgents = prev.map(agent => {
+                const targetExists = !agent.assignedTo || bubbles.some(b => b.id === agent.assignedTo);
+                if (now >= agent.nextUpdate || !targetExists) {
+                    changed = true;
+                    return assignByProbability(agent);
+                }
+                return agent;
+            });
+            return changed ? nextAgents : prev;
+        });
+    }, 500); 
 
     return () => clearInterval(interval);
   }, [demoMode, bubbles]); 
@@ -245,31 +290,18 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
 
   return (
     <group>
-      {(() => {
-        // Track how many agents are currently at each bubble
-        const localCounts = {};
-        
-        return agents.map((agent) => {
-          // Figure out this specific agent's "place in line" at their assigned bubble
-          let localIndex = 0;
-          if (agent.assignedTo) {
-            localIndex = localCounts[agent.assignedTo] || 0;
-            localCounts[agent.assignedTo] = localIndex + 1;
-          }
-
-          return (
-            <Agent 
-              key={agent.id} 
-              index={localIndex} // <--- Pass the LOCAL index here instead of the global map 'i'
-              startPos={agent.startPos} 
-              assignedTo={agent.assignedTo} 
-              bubbleRefs={bubbleRefs}       
-              color={agent.color} 
-              speedOffset={agent.speedOffset} 
-            />
-          );
-        });
-      })()}
+      {agents.map((agent) => (
+        <Agent 
+            key={agent.id} 
+            id={agent.id} 
+            startPos={agent.startPos} 
+            assignedTo={agent.assignedTo} 
+            bubbleRefs={bubbleRefs}       
+            color={agent.color} 
+            speedOffset={agent.speedOffset} 
+            sharedPositions={sharedPositions} 
+        />
+      ))}
     </group>
   );
 }
