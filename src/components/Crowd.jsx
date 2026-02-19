@@ -2,7 +2,6 @@ import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, Quaternion, Euler, Color, MeshStandardMaterial } from 'three';
 
-// --- A Single "Bubble" Character ---
 const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, sharedPositions }) => {
   const group = useRef();
   

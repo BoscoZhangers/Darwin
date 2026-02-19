@@ -9,12 +9,10 @@ import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
 import vid2 from './assets/vid2.mov';
 import pic2 from './assets/pic2.png';
-import pic3 from './assets/pic3.png'; // NEW: Imported pic3
+import pic3 from './assets/pic3.png'; 
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
-
-// --- 3D Components ---
 
 // 1. INFINITE ZOOM OUT RIG
 const CameraRig = () => {
@@ -190,13 +188,69 @@ function SceneBackground() {
   );
 }
 
-// --- NEW COMPONENT: Features Showcase ---
+// Features Showcase 
 const FeaturesShowcase = () => {
   return (
     <div className="relative z-10 w-full bg-gradient-to-b from-transparent via-black/90 to-black text-white py-24 px-6 md:px-12" id="features">
       <div className="max-w-7xl mx-auto space-y-32">
 
-        {/* Feature 1: Predictive vs Live Mode */}
+        {/* Feature 1: Demo Video */}
+        <div className="text-center space-y-12">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
+              <Sparkles size={14} className="text-yellow-400" />
+              <span>See it in action</span>
+            </div>
+            <h3 className="text-4xl md:text-5xl font-bold">Evolution at 60 FPS</h3>
+          </div>
+          
+          <div className="relative w-full max-w-5xl mx-auto aspect-video bg-black rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden group cursor-pointer">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform duration-300">
+                <Play size={32} className="ml-1 fill-white" />
+              </div>
+            </div>
+            <div className="absolute bottom-0 w-full p-8 bg-gradient-to-t from-black/80 to-transparent text-left">
+              <p className="text-sm font-mono text-cyan-400">DEMO_REEL_V1.mp4</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Feature 2: The Motto Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full mt-12 mb-12">
+          {[
+            {
+              icon: <Eye size={32} />,
+              word: "VISUALIZE",
+              color: "text-cyan-400",
+              desc: "Leverage our heatmaps and live analytics dashboard to optimize your frontend."
+            },
+            {
+              icon: <Users size={32} />,
+              word: "SIMULATE",
+              color: "text-purple-400",
+              desc: "Stop guessing. Predict user behavior with swarm intelligence before you ship a single line."
+            },
+            {
+              icon: <Dna size={32} />,
+              word: "EVOLVE",
+              color: "text-green-400",
+              desc: "Leverage your data to make informed changes and evolve your code with our AI tools."
+            }
+          ].map((item, i) => (
+            <div key={i} className="group relative p-8 rounded-3xl bg-white/5 border border-white/10 overflow-hidden hover:bg-white/10 transition-all duration-300">
+              <div className={`absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500 ${item.color}`}>
+                {item.icon}
+              </div>
+              <div className="mt-16 space-y-4 relative z-10">
+                <h4 className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.word}</h4>
+                <p className="text-gray-400 leading-relaxed text-sm">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Feature 3: Predictive vs Live Mode */}
         <div className="flex flex-col items-center text-center gap-8 mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
               <Activity size={14} className="text-green-400" />
@@ -236,7 +290,7 @@ const FeaturesShowcase = () => {
             </div>
         </div>
 
-        {/* Feature 2: Visual Editing */}
+        {/* Feature 4: Visual Editing */}
         <div className="flex flex-col md:flex-row-reverse items-center gap-12">
           <div className="flex-1 space-y-6">
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-400">
@@ -244,7 +298,7 @@ const FeaturesShowcase = () => {
             </div>
             <h3 className="text-4xl font-bold tracking-tight">Drag & Drop Evolution</h3>
             <p className="text-gray-400 text-lg leading-relaxed">
-              Modify your React components directly in our IDE. 
+              Modify your attributes directly in our IDE. 
               Drag elements to new positions and watch the code update instantly 
               via our bi-directional sync engine that's linked to your own Github repo.
             </p>
@@ -263,7 +317,7 @@ const FeaturesShowcase = () => {
           </div>
         </div>
 
-        {/* Feature 3: Live Interaction Heat Maps */}
+        {/* Feature 5: Live Interaction Heat Maps */}
         <div className="flex flex-col md:flex-row items-center gap-12 mt-12">
           <div className="flex-1 space-y-6">
             <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400">
@@ -287,7 +341,7 @@ const FeaturesShowcase = () => {
           </div>
         </div>
 
-        {/* Feature 4: Natural Language Synthesis */}
+        {/* Feature 6: Natural Language Synthesis */}
         <div className="flex flex-col md:flex-row items-center gap-12">
           <div className="flex-1 space-y-6">
             <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center border border-pink-500/20 text-pink-400">
@@ -336,7 +390,7 @@ const FeaturesShowcase = () => {
         </div>
 
        
-        {/* Feature 5: Live Analytics Dashboard (UPDATED TO USE pic3.png) */}
+        {/* Feature 7: Live Analytics Dashboard (UPDATED TO USE pic3.png) */}
         <div className="flex flex-col md:flex-row items-center gap-12 mt-12">
           <div className="flex-1 space-y-6">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-400">
@@ -358,40 +412,6 @@ const FeaturesShowcase = () => {
                />
             </div>
           </div>
-        </div>
-
-        {/* Feature 6: The Motto Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full mt-12 mb-12">
-          {[
-            {
-              icon: <Eye size={32} />,
-              word: "VISUALIZE",
-              color: "text-cyan-400",
-              desc: "Leverage our heatmaps and live analytics dashboard to optimize your frontend."
-            },
-            {
-              icon: <Users size={32} />,
-              word: "SIMULATE",
-              color: "text-purple-400",
-              desc: "Stop guessing. Predict user behavior with swarm intelligence before you ship a single line."
-            },
-            {
-              icon: <Dna size={32} />,
-              word: "EVOLVE",
-              color: "text-green-400",
-              desc: "Leverage your data to make informed changes and evolve your code with our AI tools."
-            }
-          ].map((item, i) => (
-            <div key={i} className="group relative p-8 rounded-3xl bg-white/5 border border-white/10 overflow-hidden hover:bg-white/10 transition-all duration-300">
-              <div className={`absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500 ${item.color}`}>
-                {item.icon}
-              </div>
-              <div className="mt-16 space-y-4 relative z-10">
-                <h4 className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.word}</h4>
-                <p className="text-gray-400 leading-relaxed text-sm">{item.desc}</p>
-              </div>
-            </div>
-          ))}
         </div>
 
       </div>
@@ -485,7 +505,7 @@ const Footer = () => {
     );
 }
 
-// --- Main App Component ---
+// Main App Component 
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -568,7 +588,7 @@ export default function App() {
           `}
         </style>
 
-        {/* --- HERO SECTION (100vh) --- */}
+        {/* HERO SECTION (100vh) */}
         <div className="relative h-screen w-full flex flex-col items-center justify-center shrink-0 z-10 pointer-events-none select-none">
             
             <div className="flex flex-col items-center gap-8">

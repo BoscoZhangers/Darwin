@@ -28,7 +28,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
       if (e.data.type === 'UPDATE_POS') {
-          // No need to compensate here anymore since zoom is handled internally by the iframe body
           handleUpdateLayout(
               e.data.dataDarwinId || e.data.index, 
               e.data.x, 
@@ -44,7 +43,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
           e.data.x,
           e.data.y,
           null,
-          e.data.file || 'src/pages/Home.jsx',
+          e.data.file,
           {attr : e.data.attr, value : e.data.value}
         )
       }
@@ -63,7 +62,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
   const prepareFileSystem = () => {
     const effectiveFiles = { ...files };
-    // Apply proposed code to the currently active tab being generated
     if (proposedCode && activeTab) effectiveFiles[activeTab] = proposedCode;
     return JSON.stringify(effectiveFiles);
   };
@@ -78,44 +76,14 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
-    html {
-        width: 100%;
-        height: 100%;
-        overflow-x: hidden; /* Prevent horizontal scrollbar on html */
-    }
-    body { 
-      margin: 0; 
-      padding: 0;
-      background: #fff; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-      user-select: none; 
-      
-      /* THIS IS THE FIX: Zoom out the body internally */
-      zoom: 0.65; 
-      -moz-transform: scale(0.75); 
-      -moz-transform-origin: 0 0;
-      /* Compensate for width when scaled so it doesn't wrap early */
-      width: 100%; 
-    }
+    html { width: 100%; height: 100%; overflow-x: hidden; }
+    body { margin: 0; padding: 0; background: #fff; font-family: -apple-system, sans-serif; user-select: none; zoom: 0.65; -moz-transform: scale(0.75); -moz-transform-origin: 0 0; width: 100%; }
     .mode-edit .darwin-draggable { cursor: grab; }
     .mode-edit .darwin-draggable:active { cursor: grabbing; }
     .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; }
     .mode-live .darwin-draggable { cursor: pointer; }
     .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; }
-    
-    img[src="AI_GENERATED_PLACEHOLDER"] {
-        background-color: #f3f4f6;
-        border: 2px dashed #cbd5e1;
-        border-radius: 8px;
-        min-width: 100px;
-        min-height: 100px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: #94a3b8;
-        font-family: monospace;
-        font-size: 12px;
-    }
+    img[src="AI_GENERATED_PLACEHOLDER"] { background-color: #f3f4f6; border: 2px dashed #cbd5e1; border-radius: 8px; min-width: 100px; min-height: 100px; display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; font-family: monospace; font-size: 12px; }
   </style>
 </head>
 <body class="mode-${mode}">
@@ -156,10 +124,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       
       const isDragOp = useRef(false);
       const startPos = useRef({ x: 0, y: 0 });
-
-      // Because zoom is applied via CSS zoom on the body, 
-      // getBoundingClientRect handles the scaling math internally in most modern browsers.
-      // So we don't need to manually divide by SCALE_FACTOR here anymore.
 
       useEffect(() => {
         const handleMsg = (e) => {
@@ -203,8 +167,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
             const rect = elem.getBoundingClientRect();
             const parent = elem.offsetParent || document.body;
             const parentRect = parent.getBoundingClientRect();
-            
-            // Standard relative calculation 
             const relX = (rect.left - parentRect.left);
             const relY = (rect.top - parentRect.top);
             
@@ -225,10 +187,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         if (!isDragging || '${mode}' === 'live') return; 
         
         const handleMove = (e) => { 
-            // Standard calculation
-            // We need to account for CSS zoom on mouse deltas (divide by zoom level)
             const zoomLevel = parseFloat(window.getComputedStyle(document.body).zoom) || 0.75;
-            
             const deltaX = (e.clientX - dragMeta.current.startX) / zoomLevel;
             const deltaY = (e.clientY - dragMeta.current.startY) / zoomLevel;
             let newX = dragMeta.current.initialRelX + deltaX;
@@ -304,31 +263,20 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         for (let ext of imgExts) { 
             if (files[path + ext]) return path + ext; 
         } 
-
-        // Forgiving search
         const filename = relative.split('/').pop();
         for (const fileKey in files) {
             if (fileKey.endsWith('/' + filename) || fileKey === filename) {
                 return fileKey;
             }
         }
-
         return path; 
     }
      
     function require(currentPath, importPath) { 
       if (EXTERNALS[importPath]) return EXTERNALS[importPath];
-      
       const resolved = resolvePath(currentPath, importPath);
-
-      if (files[resolved] && isImageFile(resolved)) {
-         return files[resolved];
-      }
-      
-      if (isImageFile(importPath) || isImageFile(resolved)) {
-         return "AI_GENERATED_PLACEHOLDER";
-      }
-
+      if (files[resolved] && isImageFile(resolved)) return files[resolved];
+      if (isImageFile(importPath) || isImageFile(resolved)) return "AI_GENERATED_PLACEHOLDER";
       if (importPath.endsWith('.css')) {
          if (files[resolved]) {
             const style = document.createElement('style');
@@ -337,7 +285,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
          }
          return {};
       }
-
       if (!modules[resolved]) {
         if (!files[resolved]) {
             console.warn(\`Mocking missing module: \${importPath}\`);
@@ -363,8 +310,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 </html>`;
 
   return (
-    // FIX: Reverted external wrapper scaling and removed complex div structure.
-    // The scaling is now purely handled inside the iframe's HTML/CSS.
     <iframe 
         ref={iframeRef} 
         srcDoc={srcDoc} 
@@ -533,7 +478,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
-  // Capture System Logs
   useEffect(() => {
       const handleSysLog = (e) => {
           if (e.data.type === 'SYSTEM_LOG') {
@@ -552,7 +496,22 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, []);
 
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
-  const handleStyleChange = (id, label, prop, value) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); try { window.postMessage({ type: 'UPDATE_STYLE', dataDarwinId: label, attr: prop, value}, '*'); } catch (e) {} };
+
+  const handleStyleChange = (id, label, prop, value) => { 
+    const bubble = bubbles.find(b => b.id === id);
+    const file = bubble?.meta?.file || 'src/App.jsx';
+
+    setBubbles(prev => prev.map(b => b.id === id ? { ...b, meta: { ...(b.meta || {}), [prop]: value } } : b)); 
+    try { 
+        window.postMessage({ 
+            type: 'UPDATE_STYLE', 
+            dataDarwinId: label, 
+            attr: prop, 
+            value: value, 
+            file: file 
+        }, '*'); 
+    } catch (e) {} 
+  };
 
   const handleDeleteBubble = (id) => { if (activeId === id) setActiveId(null); setBubbles(prev => prev.filter(b => b.id !== id)); };
   const toggleVisibility = (id) => { setBubbles(prev => prev.map(b => b.id === id ? { ...b, visible: !b.visible } : b)); };
@@ -571,16 +530,13 @@ export default function Dashboard({ user, token, repo, onBack }) {
       }
   };
 
-  // --- NEW HELPER: Normalize Bubbles to 100% ---
   const normalizeAndSetBubbles = useCallback((bubbleData, updatingId = null, newCount = null) => {
       let tempBubbles = bubbleData.map(b => 
           (updatingId && b.label === updatingId && newCount !== null) ? { ...b, count: newCount } : b
       );
 
-      // Sum all probabilities (counts)
       const totalProb = tempBubbles.reduce((sum, b) => sum + (b.count || 0), 0);
 
-      // Normalization: If sum > 100, scale down.
       if (totalProb > 100) {
           const scale = 100 / totalProb;
           tempBubbles = tempBubbles.map(b => ({
@@ -615,7 +571,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
               });
               if (!resp.ok) return b;
               const json = await resp.json();
-              // Interpret 'count' as a probability percentage (0-100)
               if (typeof json?.count === 'number') {
                   return { ...b, count: json.count }; 
               }
@@ -623,7 +578,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
           return b;
       }));
       
-      // Use helper to ensure <= 100%
       normalizeAndSetBubbles(predictedBubbles);
       setAiLog(prev => [...prev, { role: 'success', text: 'Probabilities loaded.' }]);
   }, [normalizeAndSetBubbles]);
@@ -659,30 +613,24 @@ export default function Dashboard({ user, token, repo, onBack }) {
   function parseStyleInner(inner) {
     let x = null;
     let y = null;
-
     let backgroundColor = { r: null, g: null, b: null };
     let color = { r: null, g: null, b: null };
 
-    // ---------- Extract left ----------
     const leftMatch = inner.match(/left\s*:\s*['"]?(\d+)?['"]?/);
     if (leftMatch) {
         x = parseInt(leftMatch[1], 10);
         inner = inner.replace(leftMatch[0], "");
     }
 
-    // ---------- Extract top ----------
     const topMatch = inner.match(/top\s*:\s*['"]?(\d+)?['"]?/);
     if (topMatch) {
         y = parseInt(topMatch[1], 10);
         inner = inner.replace(topMatch[0], "");
     }
 
-    // ---------- Color parsing helper ----------
     function parseColor(str) {
         if (!str) return { r: null, g: null, b: null };
-
         str = str.trim();
-
         if (str.startsWith("#")) {
             const hex = str.replace("#", "");
             return {
@@ -691,42 +639,31 @@ export default function Dashboard({ user, token, repo, onBack }) {
                 b: parseInt(hex.substring(4, 6), 16)
             };
         }
-
         if (str.startsWith("rgb")) {
             const rgb = str.match(/\d+/g);
             if (rgb) {
-                return {
-                    r: parseInt(rgb[0]),
-                    g: parseInt(rgb[1]),
-                    b: parseInt(rgb[2])
-                };
+                return { r: parseInt(rgb[0]), g: parseInt(rgb[1]), b: parseInt(rgb[2]) };
             }
         }
-
         return { r: null, g: null, b: null };
     }
 
-      // ---------- Extract backgroundColor ----------
       const bgMatch = inner.match(/backgroundColor\s*:\s*['"]?([^,'"}]+)['"]?/);
       if (bgMatch) {
           backgroundColor = parseColor(bgMatch[1]);
           inner = inner.replace(bgMatch[0], "");
       }
 
-      // ---------- Extract color ----------
       const colorMatch = inner.match(/color\s*:\s*['"]?([^,'"}]+)['"]?/);
       if (colorMatch) {
           color = parseColor(colorMatch[1]);
           inner = inner.replace(colorMatch[0], "");
       }
 
-      // ---------- Clean commas ----------
       inner = inner.replace(/,,+/g, ",");
       inner = inner.replace(/^,|,$/g, "").trim();
 
-      // ---------- Convert remaining style to object ----------
       const styleObject = {};
-
       if (inner.length > 0) {
           const pairs = inner.split(",");
           pairs.forEach(pair => {
@@ -741,7 +678,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
           });
       }
 
-      // ---------- Insert RGB objects ----------
       styleObject.backgroundColor_R = backgroundColor.r ? backgroundColor.r : -1;
       styleObject.backgroundColor_G = backgroundColor.g ? backgroundColor.g : -1;
       styleObject.backgroundColor_B = backgroundColor.b ? backgroundColor.b : -1;
@@ -749,24 +685,25 @@ export default function Dashboard({ user, token, repo, onBack }) {
       styleObject.color_G = color.g ? color.g : -1;
       styleObject.color_B = color.b ? color.b : -1;
 
-      // console.log("PArse x", x)
-
-      return {
-          x,
-          y,
-          style: styleObject
-      };
+      return { x, y, style: styleObject };
   }
 
-  // --- UPDATE CODE ---
-  const handleUpdateLayout = useCallback((id, newX, newY, newHeight, filePathArg, extra_style_update=false) => { 
+  // --- THE FIX: INTELLIGENT JSX BRACKET MATCHER ---
+  const handleUpdateLayout = useCallback((idOrLabel, newX, newY, newHeight, filePathArg, extra_style_update=false) => { 
+    const bubble = bubbles.find(b => b.id === idOrLabel || b.label === idOrLabel);
+    const targetBubbleId = bubble ? bubble.id : idOrLabel;
+    const idToMatch = bubble ? bubble.label : idOrLabel;
+    const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
+
     setBubbles(prev => prev.map(b => 
-       b.id === id ? { ...b, position: [newX, newHeight ?? b.position[1], newY] } : b
+       b.id === targetBubbleId ? { ...b, position: [newX ?? b.position[0], newHeight ?? b.position[1], newY ?? b.position[2]] } : b
     ));
+
+    let predict_other = {}; 
 
     const fetchBackendCount = async () => { 
       try { 
-        let div_id = id;
+        let div_id = idToMatch;
         if (typeof div_id == "number") {
            const mockIds = ["nav-main", "hero-text", "btn-cta", "description", "btn-cta-2"];
            if(mockIds[div_id]) div_id = mockIds[div_id];
@@ -780,13 +717,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
         if (!resp.ok) return;
         const json = await resp.json(); 
         if (typeof json?.count === 'number') {
-            // Use helper to set and normalize new count
             setBubbles(currentBubbles => {
                 let tempBubbles = currentBubbles.map(b => 
                     b.label === div_id ? { ...b, count: json.count } : b
                 );
                 
-                // Perform the same normalization logic inside the setter to guarantee fresh state
                 const totalProb = tempBubbles.reduce((sum, b) => sum + (b.count || 0), 0);
                 if (totalProb > 100) {
                     const scale = 100 / totalProb;
@@ -802,96 +737,129 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }; 
 
     if (demoMode) {
-      // 1. Identify File
-      const bubble = bubbles.find(b => b.id === id);
-      const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
-      var predict_other = {};
-
-      // 2. Update Code
       setFileContents(prev => {
         const code = prev[filePath];
         if (!code) return prev; 
 
-        var newCode = code;
+        let newCode = code;
         
-        if (extra_style_update) {
-          const { attr, value } = extra_style_update;
-          const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
-          newCode = code.replace(/<(nav|button|h1|div|section|header|p|span)\b([^>]*)>/g, (fullMatch, tag, props) => {
-            let shouldUpdate = false;
-            const idToMatch = id;
-            const idRegex = new RegExp('data-darwin-id\\s*=\\s*["\']' + idToMatch + '["\']');
-            const idAttrRegex = new RegExp('id\\s*=\\s*["\']' + idToMatch + '["\']');
-            if (idRegex.test(props) || idAttrRegex.test(props)) shouldUpdate = true;
-            if (shouldUpdate) {
-              let newProps = props;
-              const attrEqRegex = new RegExp(mappedAttr + "\\s*=\\s*['\"]([^'\"]*)['\"]");
-              if (attrEqRegex.test(newProps)) {
-                newProps = newProps.replace(attrEqRegex, `${mappedAttr}="${value}"`);
-              } else {
-                const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
-                const styleMatch = newProps.match(styleObjRegex);
-                if (styleMatch) {
-                  let inner = styleMatch[1];
-                  const stylePropRegex = new RegExp(mappedAttr + "\\s*:\\s*['\"]?([^,'\"}]+)['\"]?");
-                  if (stylePropRegex.test(inner)) inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
-                  else { inner = inner.trim(); if (inner.length > 0 && !inner.endsWith(',')) inner = inner + ', '; inner = inner + `${mappedAttr}: '${value}'`; }
-                  inner = inner.replace(/''/g, "");
-                  var {x, y, style} = parseStyleInner(inner);
-                  newX = x;
-                  newY = y;
-                  newProps = newProps.replace(styleObjRegex, `style={{${inner}}}`)
-                  // console.log(x)
-                  predict_other = style;
+        // Find all instances of this component in the file safely
+        const idRegex = new RegExp(`\\b(?:id|data-darwin-id)=["']${idToMatch}["']`, 'g');
+        const matches = [...newCode.matchAll(idRegex)];
+        
+        // Iterate backwards so string replacements don't mess up earlier indices!
+        for (let m = matches.length - 1; m >= 0; m--) {
+            const idMatch = matches[m];
+            const tagStartIndex = newCode.lastIndexOf('<', idMatch.index);
+            if (tagStartIndex === -1) continue;
+
+            let tagEndIndex = -1;
+            let braceCount = 0;
+            let inString = false;
+            let stringChar = '';
+
+            // This correctly skips React arrow functions `=>` by counting braces
+            for (let i = tagStartIndex; i < newCode.length; i++) {
+                const char = newCode[i];
+                if (inString) {
+                    if (char === stringChar && newCode[i-1] !== '\\') inString = false;
+                } else {
+                    if (char === '"' || char === "'") { inString = true; stringChar = char; }
+                    else if (char === '{') braceCount++;
+                    else if (char === '}') braceCount--;
+                    else if (char === '>' && braceCount === 0) {
+                        tagEndIndex = i; 
+                        break;
+                    }
                 }
-              }
-              return `<${tag}${newProps}>`;
             }
-            return fullMatch;
-          })
-        }
 
-        // --- NEW FIX: TOLERANT REGEX FOR ARROW FUNCTIONS => ---
-        // Matches the tag start, the ID, and ignores '>' if they are part of '=>'
-        const regex = new RegExp(`(<(?:=>|[^>])*\\bdata-darwin-id=["']${id}["'](?:=>|[^>])*>)`, 'g');
-        
-        if (newX != undefined && newY != undefined) {
-          newCode = newCode.replace(regex, (matchTag) => {
-              console.log(matchTag);
-              if (matchTag.match(/style={{/)) {
-                  return matchTag.replace(/style={{([\s\S]*?)}}/, (fullStyle, innerStyle) => {
-                      let updatedStyle = innerStyle;
-                      
-                      const setStyle = (prop, val) => {
-                          // Regex allows decimals and quotes
-                          const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
-                          if (propRegex.test(updatedStyle)) {
-                            updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
-                          } else {
-                            updatedStyle += `, ${prop}: '${val}'`;
+            if (tagEndIndex === -1) continue; // Malformed code safety check
+
+            let openingTag = newCode.substring(tagStartIndex, tagEndIndex + 1);
+            const beforeTag = newCode.substring(0, tagStartIndex);
+            const afterTag = newCode.substring(tagEndIndex + 1);
+
+            let closingBracket = '>';
+            if (openingTag.endsWith('/>')) {
+                closingBracket = '/>';
+                openingTag = openingTag.substring(0, openingTag.length - 2);
+            } else {
+                openingTag = openingTag.substring(0, openingTag.length - 1);
+            }
+
+            // --- 1. Process Extra Style Update (Color/Dimensions) ---
+            if (extra_style_update) {
+                const { attr, value } = extra_style_update;
+                const mappedAttr = attr === 'bgColor' ? 'backgroundColor' : attr;
+                
+                const attrEqRegex = new RegExp(`\\b${mappedAttr}\\s*=\\s*['"]([^'"]*)['"]`);
+                
+                if (attrEqRegex.test(openingTag)) {
+                    openingTag = openingTag.replace(attrEqRegex, `${mappedAttr}="${value}"`);
+                } else {
+                    const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
+                    const styleMatch = openingTag.match(styleObjRegex);
+                    
+                    if (styleMatch) {
+                        let inner = styleMatch[1];
+                        const stylePropRegex = new RegExp(`${mappedAttr}\\s*:\\s*['"]?([^,'"}]+)['"]?`);
+                        
+                        if (stylePropRegex.test(inner)) {
+                            inner = inner.replace(stylePropRegex, `${mappedAttr}: '${value}'`);
+                        } else { 
+                            inner = inner.trim(); 
+                            if (inner.length > 0 && !inner.endsWith(',')) inner += ', '; 
+                            inner += `${mappedAttr}: '${value}'`; 
+                        }
+                        inner = inner.replace(/''/g, "");
+                        
+                        // Harvest live coordinates so they don't get lost
+                        const parsed = parseStyleInner(inner);
+                        if (newX === undefined && parsed.x !== null) newX = parsed.x;
+                        if (newY === undefined && parsed.y !== null) newY = parsed.y;
+                        predict_other = parsed.style;
+                        
+                        openingTag = openingTag.replace(styleObjRegex, `style={{${inner}}}`);
+                    } else {
+                        // Inject a brand new style object safely
+                        openingTag += ` style={{ ${mappedAttr}: '${value}' }}`;
+                    }
+                }
+            }
+
+            // --- 2. Process Position Update (Drag & Drop) ---
+            if (newX !== undefined && newY !== undefined && newX !== null && newY !== null) {
+                const styleObjRegex = /style=\{\{([\s\S]*?)\}\}/;
+                const styleMatch = openingTag.match(styleObjRegex);
+                
+                if (styleMatch) {
+                    openingTag = openingTag.replace(styleObjRegex, (fullStyle, innerStyle) => {
+                          let updatedStyle = innerStyle;
+                          const setStyle = (prop, val) => {
+                              const propRegex = new RegExp(`${prop}\\s*:\\s*(?:'[^']*'|"[^"]*"|[\\d\\w.-]+)`);
+                              if (propRegex.test(updatedStyle)) {
+                                updatedStyle = updatedStyle.replace(propRegex, `${prop}: '${val}'`);
+                              } else {
+                                updatedStyle += `, ${prop}: '${val}'`;
+                              }
+                          };
+                          setStyle('left', newX + 'px');
+                          setStyle('top', newY + 'px');
+                          if (!updatedStyle.includes('position')) {
+                              updatedStyle += `, position: 'absolute'`;
                           }
-                      };
-
-                      setStyle('left', newX + 'px');
-                      setStyle('top', newY + 'px');
-                      if (!updatedStyle.includes('position')) {
-                          updatedStyle += `, position: 'absolute'`;
-                      }
-                      return `style={{${updatedStyle}}}`;
-                  });
-              } else {
-                  const styleString = ` style={{ position: 'absolute', left: '${newX}px', top: '${newY}px' }}`;
-
-                  // --- NEW FIX: SAFE INJECTION AT END OF TAG ---
-                  // Instead of searching for the first '>', we use regex anchors to find the true end
-                  if (matchTag.trim().endsWith('/>')) {
-                      return matchTag.replace(/\/>$/, `${styleString} />`);
-                  } else {
-                      return matchTag.replace(/>$/, `${styleString}>`);
-                  }
-              }
-          });
+                          return `style={{${updatedStyle}}}`;
+                    });
+                } else {
+                    openingTag += ` style={{ position: 'absolute', left: '${newX}px', top: '${newY}px' }}`;
+                }
+            }
+            
+            // Reconstruct the full string
+            newCode = beforeTag + openingTag + closingBracket + afterTag;
         }
+
         fetchBackendCount(); 
 
         if (newCode === code) return prev;
@@ -900,15 +868,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
     }
     }, [demoMode, bubbles]); 
 
-  // --- NEW: Calculate Total Users Based on Probabilities ---
   useEffect(() => {
-    // If Demo Mode, total users = 50 + Sum of Probabilities
     if (demoMode) {
         const sumProb = bubbles.reduce((sum, b) => sum + (b.count || 0), 0);
         setTotalDemoUsers(50 + sumProb);
-    } else {
-        // In live mode, it comes from firebase listener (users_full)
-    }
+    } 
   }, [bubbles, demoMode])
 
   useEffect(() => {
@@ -1022,75 +986,23 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleCodeUpdateFromPreview = (newCode) => { if (activeTab) setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
   
-  // --- FIXED: RESTORED FULL COMMIT & PUSH FUNCTIONALITY ---
   const handleCommitChanges = async () => {
-    // 1. Safety check
     if (Object.keys(fileContents).length === 0) return;
-    
     setIsSaving(true);
     const octokit = new Octokit({ auth: token });
-    
     try {
-      // 2. Get latest commit and base tree
-      const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch}`,
-      });
+      const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', { owner: repo.owner.login, repo: repo.name, ref: `heads/${repo.default_branch}` });
       const latestCommitSha = refData.object.sha;
-
-      const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        commit_sha: latestCommitSha,
-      });
+      const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', { owner: repo.owner.login, repo: repo.name, commit_sha: latestCommitSha });
       const baseTreeSha = commitData.tree.sha;
-
-      // 3. Prepare blobs for ALL text files in fileContents
-      // We filter out images to avoid corrupting them (since they are stored as Data URIs in state)
       const filesToUpload = Object.entries(fileContents).filter(([path]) => !isImageFile(path));
-      
       const newTreeItems = await Promise.all(filesToUpload.map(async ([path, content]) => {
-        const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
-          owner: repo.owner.login,
-          repo: repo.name,
-          content: content,
-          encoding: 'utf-8',
-        });
-        
-        return {
-          path: path,
-          mode: '100644',
-          type: 'blob',
-          sha: blobData.sha,
-        };
+        const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', { owner: repo.owner.login, repo: repo.name, content: content, encoding: 'utf-8' });
+        return { path: path, mode: '100644', type: 'blob', sha: blobData.sha };
       }));
-
-      // 4. Create a new tree with ALL changes
-      const { data: newTreeData } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        base_tree: baseTreeSha,
-        tree: newTreeItems,
-      });
-
-      // 5. Create commit
-      const { data: newCommitData } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        message: `Update ${newTreeItems.length} files via Darwin`,
-        tree: newTreeData.sha,
-        parents: [latestCommitSha],
-      });
-
-      // 6. Push
-      await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch}`,
-        sha: newCommitData.sha,
-      });
-
+      const { data: newTreeData } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', { owner: repo.owner.login, repo: repo.name, base_tree: baseTreeSha, tree: newTreeItems });
+      const { data: newCommitData } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', { owner: repo.owner.login, repo: repo.name, message: `Update ${newTreeItems.length} files via Darwin`, tree: newTreeData.sha, parents: [latestCommitSha] });
+      await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', { owner: repo.owner.login, repo: repo.name, ref: `heads/${repo.default_branch}`, sha: newCommitData.sha });
       setAiLog(prev => [...prev, { role: 'success', text: `Successfully pushed ${newTreeItems.length} files.` }]);
     } catch (error) {
       console.error(error);
@@ -1103,29 +1015,15 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim() || !activeTab) return;
     setIsAiGenerating(true);
-    
-    // Safety check: Ensure the URL is formed correctly
     const apiUrl = `${APP_HOST}${BACKEND_PORT}/api/generate_code`;
-    
     try {
         const currentCode = fileContents[activeTab] || '';
-        
         setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
-
-        const resp = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: aiPrompt,
-                code: currentCode
-            })
-        });
-
+        const resp = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: aiPrompt, code: currentCode }) });
         if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
             throw new Error(errorData.error || `Server responded with ${resp.status}`);
         }
-
         const data = await resp.json();
         if (data.code) {
             setProposedCode(data.code);
@@ -1133,17 +1031,14 @@ export default function Dashboard({ user, token, repo, onBack }) {
         } else {
             throw new Error("AI returned empty code.");
         }
-
     } catch (err) {
         console.error("AI Assistant Error:", err);
-        
         let errorMessage = "AI Generation Failed.";
         if (err.message.includes("Failed to fetch")) {
             errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
         } else {
             errorMessage = `AI Error: ${err.message}`;
         }
-
         setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
         setActivePanel('logs');
     } finally {
@@ -1153,7 +1048,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
 
   return (
     <div className={`h-screen w-screen bg-white dark:bg-black text-gray-900 dark:text-white flex overflow-hidden font-sans transition-colors duration-300 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
-      {/* ... Left Sidebar (Same as before) ... */}
       <div className="w-16 border-r border-gray-200 dark:border-white/5 flex flex-col items-center py-6 gap-6 z-30 bg-gray-50 dark:bg-[#0a0a0a] shrink-0 transition-colors duration-300">
         <img src={logo} className="w-10 h-10" alt="Logo" />
         <div className="flex flex-col gap-4">
@@ -1170,7 +1064,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 relative bg-gray-200 dark:bg-[#0a0a0a] overflow-hidden flex flex-col transition-colors duration-300">
         {viewMode === 'simulation' ? (
           <div className="relative w-full h-full group">
@@ -1205,13 +1098,11 @@ export default function Dashboard({ user, token, repo, onBack }) {
                             <span className="truncate" title={focusedBubble.meta?.file || 'src/App.jsx'}>{focusedBubble.meta?.file || 'src/App.jsx'}</span>
                         </div>
                     </div>
-                    {/* Stats & Details */}
                     <div className="space-y-4">
                         <div className="bg-white/50 dark:bg-white/5 p-5 rounded-2xl border border-white/20 dark:border-white/5">
                             <div className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mb-1">Total Interactions</div>
                             <div className="text-5xl font-mono font-medium tracking-tighter text-transparent bg-clip-text" style={{ backgroundImage: `linear-gradient(to right, ${focusedBubble.color}, #ffffff)` }}>{focusedBubble.count}</div>
                         </div>
-                        {/* More property grids... */}
                     </div>
                 </div>
              )}
@@ -1254,7 +1145,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
       </div>
       <div onMouseDown={() => setIsResizing(true)} className={`w-1 cursor-col-resize transition-colors ${isResizing ? 'bg-neon-blue' : 'bg-gray-200 hover:bg-gray-300 dark:bg-white/5 dark:hover:bg-neon-blue/40'}`} />
       
-      {/* Right Panel (Logs, Properties, AI) */}
       <div style={{ width: rightPanelWidth }} className="flex flex-col bg-white dark:bg-[#111] shrink-0 border-l border-gray-200 dark:border-white/5 relative transition-colors duration-300">
          {extractedGhost && (<div className="fixed z-50 pointer-events-none flex items-center gap-2 bg-[#bc13fe] text-white px-3 py-2 rounded-lg shadow-xl font-bold text-xs" style={{ left: extractedGhost.x, top: extractedGhost.y, transform: 'translate(-50%, -50%)' }}><MousePointer2 size={14} className="fill-white" /><span>{extractedGhost.tag}</span><div className="bg-white text-[#bc13fe] px-1.5 rounded text-[10px]">+ ADD</div></div>)}
          <div className="h-1/2">
@@ -1276,7 +1166,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
               </div>
            </div>
          </div>
-         {/* Bottom Half of Right Panel */}
          <div className="h-1/2 border-t border-gray-200 dark:border-white/10 flex flex-col bg-gray-50 dark:bg-black/40">
             <div className="flex border-b border-gray-200 dark:border-white/10">
                <button onClick={() => setActivePanel('logs')} className={`px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 ${activePanel === 'logs' ? 'bg-yellow-50 text-yellow-600 border-b-2 border-yellow-500 dark:bg-white/10 dark:text-yellow-500' : 'text-gray-500 hover:text-black dark:hover:text-white'}`}><Zap size={12} /> System Logs</button>
@@ -1286,7 +1175,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
             <div className="flex-1 overflow-y-auto font-mono text-[10px] p-0">
                {activePanel === 'ai' && (
                    <div className="p-4 flex flex-col h-full">
-                       {/* AI Panel Content */}
                        {proposedCode ? (
                            <div className="flex-1 flex flex-col gap-3">
                                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded text-green-600 dark:text-green-400">
