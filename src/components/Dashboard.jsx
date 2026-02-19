@@ -13,7 +13,7 @@ const TAGS_REGEX = "nav|button|h1|h2|h3|div|section|header|footer|main|article|a
 
 const isImageFile = (path) => /\.(svg|png|jpe?g|gif|ico|webp)$/i.test(path);
 
-const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor }) => {
+const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout, mode, onExtractStart, activeId, activeColor, activeTab }) => {
   const iframeRef = useRef(null);
 
   const sendSelection = useCallback(() => {
@@ -24,11 +24,11 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
   useEffect(() => { sendSelection(); }, [sendSelection]);
 
-
   useEffect(() => {
     const handleMessage = (e) => {
       if (!e.data || !e.data.type) return;
       if (e.data.type === 'UPDATE_POS') {
+          // No need to compensate here anymore since zoom is handled internally by the iframe body
           handleUpdateLayout(
               e.data.dataDarwinId || e.data.index, 
               e.data.x, 
@@ -39,7 +39,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       }
 
       if (e.data.type === 'UPDATE_STYLE') {
-        // console.log("Style")
         handleUpdateLayout(
           e.data.dataDarwinId,
           e.data.x,
@@ -49,7 +48,9 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
           {attr : e.data.attr, value : e.data.value}
         )
       }
-      if (e.data.type === 'EXTRACT_COMPONENT') onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
+      if (e.data.type === 'EXTRACT_COMPONENT') {
+          onExtractStart(e.data.tag, e.data.id, e.data.clientX, e.data.clientY, e.data.meta);
+      }
       if (e.data.type === 'LOG') console.log("[Preview Log]", e.data.message);
       if (e.data.type === 'ERROR') {
          console.error("[Preview Error]", e.data.message);
@@ -62,7 +63,8 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
   const prepareFileSystem = () => {
     const effectiveFiles = { ...files };
-    if (proposedCode) effectiveFiles['src/App.jsx'] = proposedCode;
+    // Apply proposed code to the currently active tab being generated
+    if (proposedCode && activeTab) effectiveFiles[activeTab] = proposedCode;
     return JSON.stringify(effectiveFiles);
   };
 
@@ -76,17 +78,44 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
+    html {
+        width: 100%;
+        height: 100%;
+        overflow-x: hidden; /* Prevent horizontal scrollbar on html */
+    }
     body { 
       margin: 0; 
+      padding: 0;
       background: #fff; 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
       user-select: none; 
+      
+      /* THIS IS THE FIX: Zoom out the body internally */
+      zoom: 0.65; 
+      -moz-transform: scale(0.75); 
+      -moz-transform-origin: 0 0;
+      /* Compensate for width when scaled so it doesn't wrap early */
+      width: 100%; 
     }
     .mode-edit .darwin-draggable { cursor: grab; }
     .mode-edit .darwin-draggable:active { cursor: grabbing; }
     .mode-edit .darwin-draggable:hover { outline: 2px solid #00f3ff; }
     .mode-live .darwin-draggable { cursor: pointer; }
     .mode-live .darwin-draggable:hover { outline: 2px dashed #bc13fe; }
+    
+    img[src="AI_GENERATED_PLACEHOLDER"] {
+        background-color: #f3f4f6;
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        min-width: 100px;
+        min-height: 100px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        font-family: monospace;
+        font-size: 12px;
+    }
   </style>
 </head>
 <body class="mode-${mode}">
@@ -125,9 +154,12 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       const [isDragging, setIsDragging] = useState(false); 
       const dragMeta = useRef({ startX: 0, startY: 0, initialRelX: 0, initialRelY: 0 });
       
-      // --- NEW: Drag vs Click detection ---
       const isDragOp = useRef(false);
       const startPos = useRef({ x: 0, y: 0 });
+
+      // Because zoom is applied via CSS zoom on the body, 
+      // getBoundingClientRect handles the scaling math internally in most modern browsers.
+      // So we don't need to manually divide by SCALE_FACTOR here anymore.
 
       useEffect(() => {
         const handleMsg = (e) => {
@@ -140,7 +172,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         return () => window.removeEventListener('message', handleMsg);
       }, [_darwinIndex, hasId]);
 
-      // --- NEW: Global move listener to detect drag distance ---
       useEffect(() => {
         const handleGlobalMove = (e) => {
             const dx = Math.abs(e.clientX - startPos.current.x);
@@ -155,15 +186,10 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
       const handleMouseDown = (e) => { 
         e.stopPropagation(); 
-        
-        // Reset drag detection
         isDragOp.current = false;
         startPos.current = { x: e.clientX, y: e.clientY };
         
         if ('${mode}' === 'live') { 
-          // Note: We removed e.preventDefault() here to allow clicks, 
-          // but we will intercept them in onClickCapture if it was a drag.
-          
           const rect = e.target.getBoundingClientRect(); 
           const computed = window.getComputedStyle(e.target); 
           const meta = { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x), y: Math.round(rect.y), bgColor: computed.backgroundColor, color: computed.color, type: Tag, file: _darwinFile }; 
@@ -175,15 +201,14 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
             e.preventDefault();
             const elem = e.target;
             const rect = elem.getBoundingClientRect();
-            // Calculate relative position based on offsetParent to prevent jumping
             const parent = elem.offsetParent || document.body;
             const parentRect = parent.getBoundingClientRect();
             
-            const relX = rect.left - parentRect.left;
-            const relY = rect.top - parentRect.top;
+            // Standard relative calculation 
+            const relX = (rect.left - parentRect.left);
+            const relY = (rect.top - parentRect.top);
             
             setPos({ x: relX, y: relY });
-            
             dragMeta.current = { startX: e.clientX, startY: e.clientY, initialRelX: relX, initialRelY: relY };
             setIsDragging(true);
         }
@@ -200,8 +225,12 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         if (!isDragging || '${mode}' === 'live') return; 
         
         const handleMove = (e) => { 
-            const deltaX = e.clientX - dragMeta.current.startX;
-            const deltaY = e.clientY - dragMeta.current.startY;
+            // Standard calculation
+            // We need to account for CSS zoom on mouse deltas (divide by zoom level)
+            const zoomLevel = parseFloat(window.getComputedStyle(document.body).zoom) || 0.75;
+            
+            const deltaX = (e.clientX - dragMeta.current.startX) / zoomLevel;
+            const deltaY = (e.clientY - dragMeta.current.startY) / zoomLevel;
             let newX = dragMeta.current.initialRelX + deltaX;
             let newY = dragMeta.current.initialRelY + deltaY;
             if (newX < 0) newX = 0; if (newY < 0) newY = 0; 
@@ -210,7 +239,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         
         const handleUp = () => { 
           setIsDragging(false); 
-          window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: pos.x, y: pos.y, file: _darwinFile }, '*'); 
+          window.parent.postMessage({ type: 'UPDATE_POS', index: _darwinIndex, dataDarwinId: props['data-darwin-id'], x: Math.round(pos.x), y: Math.round(pos.y), file: _darwinFile }, '*'); 
         }; 
 
         window.addEventListener('mousemove', handleMove); 
@@ -226,7 +255,6 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
       if (!canInteract) return <Tag style={style} {...props}>{children}</Tag>; 
       
-      // Added onClickCapture to intercept clicks after drag
       return <Tag style={finalStyle} className="darwin-draggable" onMouseDown={handleMouseDown} onClickCapture={handleClickCapture} {...props}>{children}</Tag>; 
     };
 
@@ -259,7 +287,34 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       }
     };
      
-    function resolvePath(base, relative) { if (!relative.startsWith('.')) return relative; const stack = base.split('/'); stack.pop(); const parts = relative.split('/'); for (let i = 0; i < parts.length; i++) { if (parts[i] === '.') continue; if (parts[i] === '..') stack.pop(); else stack.push(parts[i]); } let path = stack.join('/'); if (files[path]) return path; if (files[path + '.jsx']) return path + '.jsx'; if (files[path + '.js']) return path + '.js'; const imgExts = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']; for (let ext of imgExts) { if (files[path + ext]) return path + ext; } return path; }
+    function resolvePath(base, relative) { 
+        if (!relative.startsWith('.')) return relative; 
+        const stack = base.split('/'); stack.pop(); 
+        const parts = relative.split('/'); 
+        for (let i = 0; i < parts.length; i++) { 
+            if (parts[i] === '.') continue; 
+            if (parts[i] === '..') stack.pop(); 
+            else stack.push(parts[i]); 
+        } 
+        let path = stack.join('/'); 
+        if (files[path]) return path; 
+        if (files[path + '.jsx']) return path + '.jsx'; 
+        if (files[path + '.js']) return path + '.js'; 
+        const imgExts = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']; 
+        for (let ext of imgExts) { 
+            if (files[path + ext]) return path + ext; 
+        } 
+
+        // Forgiving search
+        const filename = relative.split('/').pop();
+        for (const fileKey in files) {
+            if (fileKey.endsWith('/' + filename) || fileKey === filename) {
+                return fileKey;
+            }
+        }
+
+        return path; 
+    }
      
     function require(currentPath, importPath) { 
       if (EXTERNALS[importPath]) return EXTERNALS[importPath];
@@ -271,7 +326,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       }
       
       if (isImageFile(importPath) || isImageFile(resolved)) {
-         return "https://placehold.co/100x100?text=Missing+Asset";
+         return "AI_GENERATED_PLACEHOLDER";
       }
 
       if (importPath.endsWith('.css')) {
@@ -285,7 +340,8 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 
       if (!modules[resolved]) {
         if (!files[resolved]) {
-           throw new Error(\`Module not found: \${importPath} (resolved: \${resolved})\`);
+            console.warn(\`Mocking missing module: \${importPath}\`);
+            return () => React.createElement('div', {style: {padding: '10px', border: '1px dashed red', color: 'red', fontSize: '10px'}}, \`Missing Component: \${importPath}\`);
         }
         const module = { exports: {} };
         const darwinCode = applyDarwinTransform(files[resolved], resolved);
@@ -306,7 +362,18 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 </body>
 </html>`;
 
-  return <iframe ref={iframeRef} srcDoc={srcDoc} onLoad={sendSelection} title="Live Preview" className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-modals" />;
+  return (
+    // FIX: Reverted external wrapper scaling and removed complex div structure.
+    // The scaling is now purely handled inside the iframe's HTML/CSS.
+    <iframe 
+        ref={iframeRef} 
+        srcDoc={srcDoc} 
+        onLoad={sendSelection} 
+        title="Live Preview" 
+        className="w-full h-full border-none bg-white" 
+        sandbox="allow-scripts allow-same-origin allow-modals" 
+    />
+  );
 };
 
 const highlightSyntax = (line) => { const parts = line.split(/(\s+|[{}();,<>=]|'[^']*'|"[^"]*")/g).filter(Boolean); return parts.map((part, i) => { if (['import', 'from', 'const', 'let', 'var', 'function', 'return', 'export', 'default', 'class', 'if', 'else', 'true', 'false', 'null', 'undefined', 'await', 'async'].includes(part)) return <span key={i} className="text-pink-600 dark:text-pink-400">{part}</span>; if (part.startsWith("'") || part.startsWith('"')) return <span key={i} className="text-yellow-600 dark:text-yellow-300">{part}</span>; if (part.match(/^[A-Z][a-zA-Z0-9]*$/)) return <span key={i} className="text-blue-600 dark:text-blue-300">{part}</span>; if (part.match(/<[^>]+>/)) return <span key={i} className="text-blue-700 dark:text-blue-400">{part}</span>; return <span key={i} className="text-gray-700 dark:text-gray-300">{part}</span>; }); };
@@ -440,7 +507,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   const [demoMode, setDemoMode] = useState(true); 
   const [darkMode, setDarkMode] = useState(true); 
   
-  const [rightPanelWidth, setRightPanelWidth] = useState(480);
+  const [rightPanelWidth, setRightPanelWidth] = useState(700);
   const [isResizing, setIsResizing] = useState(false);
   const [bubbles, setBubbles] = useState([]);
   const [activeId, setActiveId] = useState(null); 
@@ -943,8 +1010,8 @@ export default function Dashboard({ user, token, repo, onBack }) {
     initSync(); 
   }, [token, repo]);
   const handleAcceptAi = () => {
-      if (proposedCode) {
-          setFileContents(prev => ({ ...prev, ['src/App.jsx']: proposedCode }));
+      if (proposedCode && activeTab) {
+          setFileContents(prev => ({ ...prev, [activeTab]: proposedCode }));
           setProposedCode(null);
           setAiPrompt("");
           setAiLog(prev => [...prev, { role: 'success', text: 'AI Changes Applied' }]);
@@ -952,7 +1019,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
   const handleTabClose = (path) => { const newTabs = openTabs.filter(t => t !== path); setOpenTabs(newTabs); if (activeTab === path) setActiveTab(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null); };
   const handleCodeChange = (path, newCode) => { setFileContents(prev => ({ ...prev, [path]: newCode })); };
-  const handleCodeUpdateFromPreview = (newCode) => { if (activeTab === 'src/App.jsx') setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
+  const handleCodeUpdateFromPreview = (newCode) => { if (activeTab) setFileContents(prev => ({ ...prev, [activeTab]: newCode })); };
   const handleExtractStart = (tag, id, clientX, clientY, meta) => { const iframeRect = document.querySelector('iframe')?.getBoundingClientRect(); if (iframeRect) { setExtractedGhost({ tag: tag || 'Component', id: id, x: iframeRect.left + clientX, y: iframeRect.top + clientY, meta: meta }); } };
   
   // --- FIXED: RESTORED FULL COMMIT & PUSH FUNCTIONALITY ---
@@ -1034,18 +1101,17 @@ export default function Dashboard({ user, token, repo, onBack }) {
   };
 
   const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim() || !activeTab) return;
     setIsAiGenerating(true);
     
     // Safety check: Ensure the URL is formed correctly
-    const apiUrl = `${APP_HOST}${PORT}/api/generate_code`;
+    const apiUrl = `${APP_HOST}${BACKEND_PORT}/api/generate_code`;
     
     try {
-        const currentCode = fileContents['src/pages/Home.jsx'] || '';
+        const currentCode = fileContents[activeTab] || '';
         
         setAiLog(prev => [...prev, { role: 'system', text: `Requesting AI changes from ${apiUrl}...` }]);
 
-        // console.log(aiPrompt)
         const resp = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1063,7 +1129,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         const data = await resp.json();
         if (data.code) {
             setProposedCode(data.code);
-            setAiLog(prev => [...prev, { role: 'success', text: 'AI generated a new version of App.jsx. Review above!' }]);
+            setAiLog(prev => [...prev, { role: 'success', text: `AI generated a new version of ${activeTab.split('/').pop()}. Review above!` }]);
         } else {
             throw new Error("AI returned empty code.");
         }
@@ -1071,7 +1137,6 @@ export default function Dashboard({ user, token, repo, onBack }) {
     } catch (err) {
         console.error("AI Assistant Error:", err);
         
-        // Detailed error logging for the UI
         let errorMessage = "AI Generation Failed.";
         if (err.message.includes("Failed to fetch")) {
             errorMessage = `Connection Error: Is the backend running at ${apiUrl}?`;
@@ -1080,7 +1145,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
         }
 
         setAiLog(prev => [...prev, { role: 'error', text: errorMessage }]);
-        setActivePanel('logs'); // Auto-switch to logs so you see the error
+        setActivePanel('logs');
     } finally {
         setIsAiGenerating(false);
     }
@@ -1206,6 +1271,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                    onExtractStart={handleExtractStart} 
                    activeId={activeId}
                    activeColor={getActiveColor()}
+                   activeTab={activeTab}
                  />
               </div>
            </div>

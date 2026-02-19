@@ -316,7 +316,6 @@ const FeaturesShowcase = () => {
                     </button>
                 </div>
 
-                {/* ARROW */}
                 <div className="text-pink-500/50 hidden md:block">
                    <ArrowRight size={32} />
                 </div>
@@ -324,7 +323,6 @@ const FeaturesShowcase = () => {
                    <ArrowRight size={24} />
                 </div>
 
-                {/* AFTER */}
                 <div className="flex-1 bg-[#050505] rounded-xl border border-white/5 p-8 flex items-center justify-center min-h-[160px] w-full relative overflow-hidden">
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.05)_1px,transparent_1px)] bg-[size:10px_10px]" />
                     <button className="relative z-10 bg-black text-cyan-400 px-6 py-3 font-mono font-bold tracking-widest border border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.5),inset_0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-950 hover:shadow-[0_0_25px_rgba(6,182,212,0.8),inset_0_0_15px_rgba(6,182,212,0.5)] transition-all uppercase">
@@ -522,13 +520,12 @@ export default function App() {
 
   if (!user) {
     return (
-      // CHANGED: Main container allows scrolling now (min-h-screen, overflow-y-auto)
       <div className="min-h-screen w-screen text-white flex flex-col relative overflow-y-auto overflow-x-hidden font-sans selection:bg-purple-500/30">
         
-        {/* --- 3D Background Layer (Fixed) --- */}
+        {/* 3D Background Layer */}
         <SceneBackground />
         
-        {/* --- Styles for UI --- */}
+        {/* Styles for UI */}
         <style>
           {`
             @keyframes marquee {
@@ -614,10 +611,10 @@ export default function App() {
             <ScrollNudge />
         </div>
 
-        {/* --- SCROLLABLE CONTENT BELOW FOLD --- */}
+        {/* SCROLLABLE CONTENT BELOW FOLD */}
         <FeaturesShowcase />
 
-        {/* --- FOOTER (Powered By + Copyright) --- */}
+        {/* FOOTER (Powered By + Copyright) */}
         <Footer />
 
         <Analytics />
