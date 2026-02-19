@@ -38,7 +38,6 @@ const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, share
     startPos[2] + (Math.random() - 0.5) * 10
   ));
   
-  // --- THE FIX: Stable Random Target Offset ---
   // Calculates once when they pick a target, doesn't change if someone else leaves
   const targetOffset = useMemo(() => {
     const angle = Math.random() * Math.PI * 2;
@@ -63,13 +62,13 @@ const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, share
     const target = new Vector3();
     const isWandering = !assignedTo;
 
-    // --- 0. COLOR TRANSITION ---
+    // 0. COLOR TRANSITION
     outfitMaterial.color.lerp(targetColor, 0.1);
     outfitMaterial.emissive.lerp(targetColor, 0.1);
     const targetIntensity = isWandering ? 0 : 0.5;
     outfitMaterial.emissiveIntensity += (targetIntensity - outfitMaterial.emissiveIntensity) * 0.1;
 
-    // --- 1. TARGET LOGIC ---
+    // 1. TARGET LOGIC
     if (isWandering) {
         if (current.distanceTo(wanderTarget.current) < 2) {
             wanderTarget.current.set(
@@ -91,7 +90,7 @@ const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, share
         }
     }
 
-    // --- 2. MOVEMENT LOGIC (WITH COLLISION AVOIDANCE) ---
+    // 2. MOVEMENT LOGIC (WITH COLLISION AVOIDANCE) 
     const distToTarget = current.distanceTo(target);
     const stopThreshold = 0.15; 
     let isMoving = false;
@@ -135,7 +134,7 @@ const Agent = ({ id, startPos, assignedTo, bubbleRefs, color, speedOffset, share
         isMoving = true;
     }
 
-    // --- 3. ROTATION & ANIMATION ---
+    // 3. ROTATION & ANIMATION
     if (isMoving) {
         // Face the exact direction of movement
         if (moveDir.lengthSq() > 0.001) {
@@ -182,7 +181,7 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
   // Shared ref holding live coordinates for all humanoids so they don't walk into each other
   const sharedPositions = useRef({});
 
-  // --- EFFECT 1: RESIZE POOL (Reactive) ---
+  // RESIZE POOL (Reactive)
   useEffect(() => {
     setAgents(currentAgents => {
         let newPool = [...currentAgents];
@@ -227,7 +226,7 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
     });
   }, [capacity, rawUsers, demoMode]); 
 
-  // --- EFFECT 2: ASSIGN TARGETS (Demo Mode Interval) ---
+  // ASSIGN TARGETS (Demo Mode Interval) 
   useEffect(() => {
     if (!demoMode) return;
 
@@ -271,7 +270,7 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
     return () => clearInterval(interval);
   }, [demoMode, bubbles]); 
 
-  // --- EFFECT 3: ASSIGN TARGETS (Live Mode Reactive) ---
+  //  ASSIGN TARGETS (Live Mode Reactive) 
   useEffect(() => {
     if (demoMode) return;
 
