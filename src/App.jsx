@@ -10,6 +10,7 @@ import { Analytics } from "@vercel/analytics/react";
 import vid2 from './assets/vid2.mov';
 import pic2 from './assets/pic2.png';
 import pic3 from './assets/pic3.png'; 
+import demoVid from './assets/Demo.mov';
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
@@ -204,15 +205,16 @@ const FeaturesShowcase = () => {
             <h3 className="text-4xl md:text-5xl font-bold">Evolution at 60 FPS</h3>
           </div>
           
-          <div className="relative w-full max-w-5xl mx-auto aspect-video bg-black rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden group cursor-pointer">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform duration-300">
-                <Play size={32} className="ml-1 fill-white" />
-              </div>
-            </div>
-            <div className="absolute bottom-0 w-full p-8 bg-gradient-to-t from-black/80 to-transparent text-left">
-              <p className="text-sm font-mono text-cyan-400">DEMO_REEL_V1.mp4</p>
-            </div>
+          <div className="relative w-full max-w-5xl mx-auto aspect-video bg-black rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden">
+            {/* The looping video player */}
+            <video 
+              src={demoVid} 
+              autoPlay 
+              loop 
+              muted 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
 
