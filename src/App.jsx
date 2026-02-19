@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
-import { Github, Command, Sparkles, Dna, Play, Monitor, BarChart, MousePointer2, ChevronsDown } from 'lucide-react'; 
+import { Github, Command, Sparkles, Dna, Play, Monitor, BarChart, MousePointer2, ChevronsDown, Users, Zap, Globe, Eye, Activity, ArrowRight, Clock } from 'lucide-react'; 
 import { Canvas, useFrame, extend, useThree } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,6 +8,8 @@ import Dashboard from './components/Dashboard';
 import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
 import vid2 from './assets/vid2.mov';
+import pic2 from './assets/pic2.png';
+import pic3 from './assets/pic3.png'; // NEW: Imported pic3
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
@@ -193,28 +195,45 @@ const FeaturesShowcase = () => {
   return (
     <div className="relative z-10 w-full bg-gradient-to-b from-transparent via-black/90 to-black text-white py-24 px-6 md:px-12" id="features">
       <div className="max-w-7xl mx-auto space-y-32">
-        
-        {/* Feature 1: Analytics */}
-        <div className="flex flex-col md:flex-row items-center gap-12">
-          <div className="flex-1 space-y-6">
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400">
-              <BarChart size={24} />
+
+        {/* Feature 1: Predictive vs Live Mode */}
+        <div className="flex flex-col items-center text-center gap-8 mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
+              <Activity size={14} className="text-green-400" />
+              <span>Two Ways to Build</span>
             </div>
-            <h3 className="text-4xl font-bold tracking-tight">AI-Driven UI Analytics</h3>
-            <p className="text-gray-400 text-lg leading-relaxed">
-              Understand how users interact with your components before you launch. 
-              Our predictive models generate heatmaps and click-density charts  
-              to optimize engagement.
+            <h3 className="text-4xl md:text-5xl font-bold tracking-tight max-w-3xl">Design for the Future. Monitor the Present.</h3>
+            <p className="text-gray-400 text-lg leading-relaxed max-w-2xl">
+              Switch seamlessly between our AI-driven predictive engine and real-time user tracking.
             </p>
-          </div>
-          <div className="flex-1 w-full">
-            <div className="aspect-video bg-gray-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden group relative">
-              {/* Placeholder for Image/Video */}
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50 group-hover:bg-gray-800/40 transition-colors">
-                <span className="text-gray-500 font-mono text-xs uppercase tracking-widest">Analytics Dashboard Preview</span>
-              </div>
+            
+            <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mt-8">
+                {/* Demo Mode Card */}
+                <div className="flex-1 bg-gray-900/50 rounded-2xl border border-white/10 p-8 flex flex-col items-center text-center group hover:border-cyan-500/50 transition-colors">
+                    <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(6,182,212,0.2)] group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-shadow">
+                        <BarChart size={32} className="text-cyan-400" />
+                    </div>
+                    <h4 className="text-2xl font-bold mb-3 text-white">Predictive Mode</h4>
+                    <p className="text-gray-400 text-sm">
+                        Feed component layouts into our deep learning model 
+                        and simulate predicted user engagement 
+                        based on synthetic heatmaps.
+                    </p>
+                </div>
+                
+                {/* Live Mode Card */}
+                <div className="flex-1 bg-gray-900/50 rounded-2xl border border-white/10 p-8 flex flex-col items-center text-center group hover:border-red-500/50 transition-colors">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(239,68,68,0.2)] group-hover:shadow-[0_0_30px_rgba(239,68,68,0.4)] transition-shadow">
+                        <Globe size={32} className="text-red-400" />
+                    </div>
+                    <h4 className="text-2xl font-bold mb-3 text-white">Live Analytics Mode</h4>
+                    <p className="text-gray-400 text-sm">
+                        Monitor your actual site visitors 
+                        populate a 3D environment in real-time as they 
+                        interact with your deployed app. See what's working and what isn't.
+                    </p>
+                </div>
             </div>
-          </div>
         </div>
 
         {/* Feature 2: Visual Editing */}
@@ -225,9 +244,9 @@ const FeaturesShowcase = () => {
             </div>
             <h3 className="text-4xl font-bold tracking-tight">Drag & Drop Evolution</h3>
             <p className="text-gray-400 text-lg leading-relaxed">
-              Modify your React components directly in the browser. 
-              Drag elements to new positions  and watch the code update instantly 
-              via our bi-directional sync engine.
+              Modify your React components directly in our IDE. 
+              Drag elements to new positions and watch the code update instantly 
+              via our bi-directional sync engine that's linked to your own Github repo.
             </p>
           </div>
           <div className="flex-1 w-full">
@@ -244,26 +263,137 @@ const FeaturesShowcase = () => {
           </div>
         </div>
 
-        {/* Feature 3: Demo Video */}
-        <div className="text-center space-y-12">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
-              <Sparkles size={14} className="text-yellow-400" />
-              <span>See it in action</span>
+        {/* Feature 3: Live Interaction Heat Maps */}
+        <div className="flex flex-col md:flex-row items-center gap-12 mt-12">
+          <div className="flex-1 space-y-6">
+            <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400">
+              <Monitor size={24} />
             </div>
-            <h3 className="text-4xl md:text-5xl font-bold">Evolution at 60 FPS</h3>
+            <h3 className="text-4xl font-bold tracking-tight">Test Your Predictions</h3>
+            <p className="text-gray-400 text-lg leading-relaxed">
+              Feeling confident with your changes? Put your predictions to the test and see how your users are interacting with your deployed web.
+              Our immersive 3D live heat maps overlay directly onto your components, turning raw interaction data into actionable visual insights instantly.
+            </p>
+          </div>
+
+          <div className="flex-1 w-full">
+            <div className="aspect-video bg-gray-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
+               <img 
+                 src={pic2} 
+                 alt="Drag and Drop Visual Editing Interface"
+                 className="w-full h-full object-cover"
+               />
+            </div>
+          </div>
+        </div>
+
+        {/* Feature 4: Natural Language Synthesis */}
+        <div className="flex flex-col md:flex-row items-center gap-12">
+          <div className="flex-1 space-y-6">
+            <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center border border-pink-500/20 text-pink-400">
+              <Sparkles size={24} />
+            </div>
+            <h3 className="text-4xl font-bold tracking-tight">Natural Language Synthesis</h3>
+            <p className="text-gray-400 text-lg leading-relaxed">
+              Don't just write code—describe it. Our Gemini-powered engine translates 
+              plain English prompts into complex component logic, styling, and state management 
+              in milliseconds.
+            </p>
+          </div>
+          <div className="flex-1 w-full">
+            <div className="flex flex-col items-center bg-gray-900/50 rounded-2xl border border-white/10 p-6 shadow-2xl">
+              
+              <div className="w-full mb-4 px-4 py-2 bg-pink-500/10 border border-pink-500/20 rounded-lg text-pink-400 text-sm font-mono flex items-center gap-2">
+                 <Sparkles size={14} />
+                 Prompt: "Make the button look like a glowing cyberpunk terminal"
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4">
+                {/* BEFORE */}
+                <div className="flex-1 bg-black rounded-xl border border-white/5 p-8 flex items-center justify-center min-h-[160px] w-full">
+                    <button className="bg-gray-800 text-white px-4 py-2 border border-gray-700">
+                        Click Me
+                    </button>
+                </div>
+
+                {/* ARROW */}
+                <div className="text-pink-500/50 hidden md:block">
+                   <ArrowRight size={32} />
+                </div>
+                <div className="text-pink-500/50 block md:hidden rotate-90">
+                   <ArrowRight size={24} />
+                </div>
+
+                {/* AFTER */}
+                <div className="flex-1 bg-[#050505] rounded-xl border border-white/5 p-8 flex items-center justify-center min-h-[160px] w-full relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.05)_1px,transparent_1px)] bg-[size:10px_10px]" />
+                    <button className="relative z-10 bg-black text-cyan-400 px-6 py-3 font-mono font-bold tracking-widest border border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.5),inset_0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-950 hover:shadow-[0_0_25px_rgba(6,182,212,0.8),inset_0_0_15px_rgba(6,182,212,0.5)] transition-all uppercase">
+                        [ SYSTEM_LINK ]
+                    </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+       
+        {/* Feature 5: Live Analytics Dashboard (UPDATED TO USE pic3.png) */}
+        <div className="flex flex-col md:flex-row items-center gap-12 mt-12">
+          <div className="flex-1 space-y-6">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-400">
+              <Activity size={24} />
+            </div>
+            <h3 className="text-4xl font-bold tracking-tight">Get Metrics That Matter</h3>
+            <p className="text-gray-400 text-lg leading-relaxed">
+              Turn raw interaction data into actionable insights. 
+              Our live telemetry dashboard tracks active agents, average engagement times, and component-level click distributions in real-time.
+            </p>
           </div>
           
-          <div className="relative w-full max-w-5xl mx-auto aspect-video bg-black rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden group cursor-pointer">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform duration-300">
-                <Play size={32} className="ml-1 fill-white" />
-              </div>
-            </div>
-            <div className="absolute bottom-0 w-full p-8 bg-gradient-to-t from-black/80 to-transparent text-left">
-              <p className="text-sm font-mono text-cyan-400">DEMO_REEL_V1.mp4</p>
+          <div className="flex-1 w-full">
+            <div className="aspect-video bg-gray-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
+               <img 
+                 src={pic3} 
+                 alt="Live Analytics Dashboard"
+                 className="w-full h-full object-cover"
+               />
             </div>
           </div>
+        </div>
+
+        {/* Feature 6: The Motto Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full mt-12 mb-12">
+          {[
+            {
+              icon: <Eye size={32} />,
+              word: "VISUALIZE",
+              color: "text-cyan-400",
+              desc: "Leverage our heatmaps and live analytics dashboard to optimize your frontend."
+            },
+            {
+              icon: <Users size={32} />,
+              word: "SIMULATE",
+              color: "text-purple-400",
+              desc: "Stop guessing. Predict user behavior with swarm intelligence before you ship a single line."
+            },
+            {
+              icon: <Dna size={32} />,
+              word: "EVOLVE",
+              color: "text-green-400",
+              desc: "Leverage your data to make informed changes and evolve your code with our AI tools."
+            }
+          ].map((item, i) => (
+            <div key={i} className="group relative p-8 rounded-3xl bg-white/5 border border-white/10 overflow-hidden hover:bg-white/10 transition-all duration-300">
+              <div className={`absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500 ${item.color}`}>
+                {item.icon}
+              </div>
+              <div className="mt-16 space-y-4 relative z-10">
+                <h4 className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.word}</h4>
+                <p className="text-gray-400 leading-relaxed text-sm">{item.desc}</p>
+              </div>
+            </div>
+          ))}
         </div>
 
       </div>
@@ -271,7 +401,7 @@ const FeaturesShowcase = () => {
   );
 };
 
-// --- NEW COMPONENT: Scroll Nudge ---
+// Scroll Nudge 
 const ScrollNudge = () => {
     const handleScroll = () => {
         window.scrollTo({
@@ -294,7 +424,7 @@ const ScrollNudge = () => {
     )
 }
 
-// --- NEW COMPONENT: Footer (Marquee + Copyright) ---
+// Footer 
 const Footer = () => {
     const GeminiLogo = () => (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-opacity">

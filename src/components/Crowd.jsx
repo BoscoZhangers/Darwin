@@ -245,17 +245,31 @@ export default function Crowd({ bubbles = [], capacity = 0, bubbleRefs, rawUsers
 
   return (
     <group>
-      {agents.map((agent, i) => (
-        <Agent 
-          key={agent.id} 
-          index={i}
-          startPos={agent.startPos} 
-          assignedTo={agent.assignedTo} 
-          bubbleRefs={bubbleRefs}       
-          color={agent.color} 
-          speedOffset={agent.speedOffset} 
-        />
-      ))}
+      {(() => {
+        // Track how many agents are currently at each bubble
+        const localCounts = {};
+        
+        return agents.map((agent) => {
+          // Figure out this specific agent's "place in line" at their assigned bubble
+          let localIndex = 0;
+          if (agent.assignedTo) {
+            localIndex = localCounts[agent.assignedTo] || 0;
+            localCounts[agent.assignedTo] = localIndex + 1;
+          }
+
+          return (
+            <Agent 
+              key={agent.id} 
+              index={localIndex} // <--- Pass the LOCAL index here instead of the global map 'i'
+              startPos={agent.startPos} 
+              assignedTo={agent.assignedTo} 
+              bubbleRefs={bubbleRefs}       
+              color={agent.color} 
+              speedOffset={agent.speedOffset} 
+            />
+          );
+        });
+      })()}
     </group>
   );
 }
