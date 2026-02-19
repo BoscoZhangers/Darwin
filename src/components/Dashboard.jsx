@@ -89,10 +89,16 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 <body class="mode-${mode}">
   <div id="root"></div>
   <script>
-    window.onerror = function(message, source, lineno, colno, error) { window.parent.postMessage({ type: 'ERROR', message: message + ' (' + source + ':' + lineno + ')' }, '*'); };
-    const originalError = console.error;
-    console.error = function(...args) { window.parent.postMessage({ type: 'ERROR', message: args.join(' ') }, '*'); originalError.apply(console, args); };
-  </script>
+  window.onerror = function(message, source, lineno, colno, error) { window.parent.postMessage({ type: 'ERROR', message: message + ' (' + source + ':' + lineno + ')' }, '*'); };
+  const originalError = console.error;
+  console.error = function(...args) { 
+    const msg = args.join(' ');
+    // Silently drop the Babel 500KB warning
+    if (msg.includes('[BABEL]') && msg.includes('500KB')) return;
+    window.parent.postMessage({ type: 'ERROR', message: msg }, '*'); 
+    originalError.apply(console, args); 
+  };
+</script>
   <script type="text/babel" data-presets="react,env">
     const files = ${prepareFileSystem()};
     const modules = {};
@@ -292,7 +298,7 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
         }
         const module = { exports: {} };
         const darwinCode = applyDarwinTransform(files[resolved], resolved);
-        const transformed = Babel.transform(darwinCode, { presets: ['react', 'env'], filename: resolved }).code;
+        const transformed = Babel.transform(darwinCode, { presets: ['react', 'env'], filename: resolved, compact: true }).code;
         const wrapper = new Function('require', 'module', 'exports', 'React', 'InteractiveElement', transformed);
         wrapper((path) => require(resolved, path), module, module.exports, React, InteractiveElement);
         modules[resolved] = module.exports;
@@ -688,16 +694,35 @@ export default function Dashboard({ user, token, repo, onBack }) {
       return { x, y, style: styleObject };
   }
 
-  // --- THE FIX: INTELLIGENT JSX BRACKET MATCHER ---
+  // --- THE NEW FIX: DEDICATED 3D MOVEMENT HANDLER ---
+  const handleBubble3DMove = useCallback((id, x, z, y) => {
+    setBubbles(prev => prev.map(b => 
+        b.id === id ? { ...b, position: [x, y, z] } : b
+    ));
+  }, []);
+
+  // --- THE LAYOUT UPDATER (2D PIXEL MODIFIER) ---
   const handleUpdateLayout = useCallback((idOrLabel, newX, newY, newHeight, filePathArg, extra_style_update=false) => { 
     const bubble = bubbles.find(b => b.id === idOrLabel || b.label === idOrLabel);
     const targetBubbleId = bubble ? bubble.id : idOrLabel;
     const idToMatch = bubble ? bubble.label : idOrLabel;
     const filePath = filePathArg || bubble?.meta?.file || 'src/App.jsx';
 
-    setBubbles(prev => prev.map(b => 
-       b.id === targetBubbleId ? { ...b, position: [newX ?? b.position[0], newHeight ?? b.position[1], newY ?? b.position[2]] } : b
-    ));
+    // Instead of overriding the 3D bubble position with pixel coordinates,
+    // we only optionally update the 2D meta data for the properties panel.
+    setBubbles(prev => prev.map(b => {
+        if (b.id === targetBubbleId) {
+            return { 
+                ...b, 
+                meta: {
+                    ...b.meta,
+                    ...(newX !== null && newX !== undefined ? { x: newX } : {}),
+                    ...(newY !== null && newY !== undefined ? { y: newY } : {})
+                }
+            };
+        }
+        return b;
+    }));
 
     let predict_other = {}; 
 
@@ -1077,7 +1102,7 @@ export default function Dashboard({ user, token, repo, onBack }) {
                 demoMode={demoMode}
                 focusedBubble={focusedBubble} 
                 onBubbleDoubleClick={handleBubbleDoubleClick}
-                onUpdateBubblePosition={handleUpdateLayout}
+                onUpdateBubblePosition={handleBubble3DMove}
              />
              {focusedBubble && (
                 <div 
