@@ -7,7 +7,6 @@ import { subscribeToAuth, signInWithGithub, signOut } from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
-import vid2 from './assets/vid2.mov';
 import pic2 from './assets/pic2.png';
 import pic3 from './assets/pic3.png'; 
 
@@ -299,14 +298,7 @@ const FeaturesShowcase = () => {
           </div>
           <div className="flex-1 w-full">
             <div className="aspect-video bg-gray-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-               <video 
-                 src={vid2} 
-                 autoPlay 
-                 loop 
-                 muted 
-                 playsInline 
-                 className="w-full h-full object-cover"
-               />
+            <video src="/DragAndDrop.mp4" autoPlay loop muted playsInline />
             </div>
           </div>
         </div>
