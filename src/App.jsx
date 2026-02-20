@@ -9,6 +9,8 @@ import RepoSelector from './components/RepoSelector';
 import { Analytics } from "@vercel/analytics/react";
 import pic2 from './assets/pic2.png';
 import pic3 from './assets/pic3.png'; 
+import beforeImg from './assets/before.png';
+import afterImg from './assets/after.png';
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
@@ -63,11 +65,11 @@ const HelperRung = ({ start, end }) => {
         <tubeGeometry ref={geomRef} args={[curve, 8, 0.08, 4, false]} /> 
         <meshPhysicalMaterial 
              transparent
-             opacity={0.6} // RESTORED: Visibility
+             opacity={0.6} 
              roughness={0.2}
              metalness={0.8}
              vertexColors={true}
-             emissiveIntensity={0.3} // RESTORED: Glow
+             emissiveIntensity={0.3} 
         />
       </mesh>
     );
@@ -129,7 +131,7 @@ function SolidDNAHelix() {
 
   return (
     <group ref={spinRef}>
-      {/* Strand 1 Tube - RESTORED Cyan Glow */}
+      {/* Strand 1 Tube */}
       <mesh>
         <tubeGeometry args={[curveA, 300, STRAND_RADIUS, 12, false]} />
         <meshPhysicalMaterial 
@@ -140,7 +142,7 @@ function SolidDNAHelix() {
         />
       </mesh>
 
-      {/* Strand 2 Tube - RESTORED Purple Glow */}
+      {/* Strand 2 Tube */}
       <mesh>
         <tubeGeometry args={[curveB, 300, STRAND_RADIUS, 12, false]} />
         <meshPhysicalMaterial 
@@ -291,9 +293,9 @@ const FeaturesShowcase = () => {
             </div>
             <h3 className="text-4xl font-bold tracking-tight">Drag & Drop Evolution</h3>
             <p className="text-gray-400 text-lg leading-relaxed">
-              Modify your attributes directly in our IDE. 
+              Modify your attributes directly in our IDE with an up-to-date rendering of your web embedded in your dashboard.
               Drag elements to new positions and watch the code update instantly 
-              via our bi-directional sync engine that's linked to your own Github repo.
+              via our bi-directional sync engine that's linked to your very own Github repo.
             </p>
           </div>
           <div className="flex-1 w-full">
@@ -328,46 +330,48 @@ const FeaturesShowcase = () => {
         </div>
 
         {/* Feature 6: Natural Language Synthesis */}
-        <div className="flex flex-col md:flex-row items-center gap-12">
+        <div className="flex flex-col md:flex-row items-center gap-12 mt-12">
           <div className="flex-1 space-y-6">
             <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center border border-pink-500/20 text-pink-400">
               <Sparkles size={24} />
             </div>
-            <h3 className="text-4xl font-bold tracking-tight">Natural Language Synthesis</h3>
+            <h3 className="text-4xl font-bold tracking-tight">Evolve with AI</h3>
             <p className="text-gray-400 text-lg leading-relaxed">
               Don't just write code—describe it. Our Gemini-powered engine translates 
               plain English prompts into complex component logic, styling, and state management 
-              in milliseconds.
+              seconds. Watch your interface evolve in real-time.
             </p>
           </div>
+          
           <div className="flex-1 w-full">
-            <div className="flex flex-col items-center bg-gray-900/50 rounded-2xl border border-white/10 p-6 shadow-2xl">
+            <div className="flex flex-col items-center bg-gray-900/40 rounded-3xl border border-white/10 p-6 shadow-2xl">
               
-              <div className="w-full mb-4 px-4 py-2 bg-pink-500/10 border border-pink-500/20 rounded-lg text-pink-400 text-sm font-mono flex items-center gap-2">
-                 <Sparkles size={14} />
-                 Prompt: "Make the button look like a glowing cyberpunk terminal"
+              {/* Prompt Bar */}
+              <div className="w-full mb-6 px-4 py-3 bg-pink-500/10 border border-pink-500/20 rounded-xl text-pink-300 text-sm font-mono flex items-center gap-3 shadow-[0_0_20px_rgba(236,72,153,0.05)]">
+                 <Sparkles size={16} className="text-pink-400 shrink-0" />
+                 <span className="truncate">Prompt: "Make the design look more futuristic and colourful."</span>
               </div>
 
-              <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4">
-                {/* BEFORE */}
-                <div className="flex-1 bg-black rounded-xl border border-white/5 p-8 flex items-center justify-center min-h-[160px] w-full">
-                    <button className="bg-gray-800 text-white px-4 py-2 border border-gray-700">
-                        Click Me
-                    </button>
+              <div className="flex flex-col md:flex-row items-center justify-between w-full gap-6">
+                {/* BEFORE IMAGE */}
+                <div className="flex-1 w-full relative group">
+                    <span className="absolute -top-3 left-4 bg-gray-800 text-gray-400 text-[10px] font-bold px-3 py-1 rounded-full border border-gray-600 z-10 uppercase tracking-widest shadow-lg">Before</span>
+                    <div className="rounded-xl border border-white/10 overflow-hidden shadow-lg bg-black aspect-video relative">
+                        <img src={beforeImg} alt="Before AI" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                    </div>
                 </div>
 
-                <div className="text-pink-500/50 hidden md:block">
-                   <ArrowRight size={32} />
-                </div>
-                <div className="text-pink-500/50 block md:hidden rotate-90">
-                   <ArrowRight size={24} />
+                {/* ARROW */}
+                <div className="text-pink-500/50 flex-shrink-0 bg-pink-500/5 p-2 rounded-full border border-pink-500/10">
+                   <ArrowRight size={24} className="rotate-90 md:rotate-0" />
                 </div>
 
-                <div className="flex-1 bg-[#050505] rounded-xl border border-white/5 p-8 flex items-center justify-center min-h-[160px] w-full relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.05)_1px,transparent_1px)] bg-[size:10px_10px]" />
-                    <button className="relative z-10 bg-black text-cyan-400 px-6 py-3 font-mono font-bold tracking-widest border border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.5),inset_0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-950 hover:shadow-[0_0_25px_rgba(6,182,212,0.8),inset_0_0_15px_rgba(6,182,212,0.5)] transition-all uppercase">
-                        [ SYSTEM_LINK ]
-                    </button>
+                {/* AFTER IMAGE */}
+                <div className="flex-1 w-full relative group">
+                    <span className="absolute -top-3 left-4 bg-pink-500/20 text-pink-400 text-[10px] font-bold px-3 py-1 rounded-full border border-pink-500/40 z-10 uppercase tracking-widest shadow-[0_0_15px_rgba(236,72,153,0.3)]">After</span>
+                    <div className="relative rounded-xl border border-pink-500/30 overflow-hidden shadow-[0_0_25px_rgba(236,72,153,0.15)] bg-black aspect-video">
+                        <img src={afterImg} alt="After AI" className="w-full h-full object-cover" />
+                    </div>
                 </div>
               </div>
 
@@ -483,10 +487,6 @@ const Footer = () => {
                 </div>
             </div>
 
-            {/* Copyright */}
-            <div className="text-center text-gray-600 text-sm">
-                <p>&copy; 2026 Darwin. Evolution for your codebase.</p>
-            </div>
         </div>
     );
 }
@@ -620,7 +620,7 @@ export default function App() {
         {/* SCROLLABLE CONTENT BELOW FOLD */}
         <FeaturesShowcase />
 
-        {/* FOOTER (Powered By + Copyright) */}
+        {/* FOOTER (Powered By) */}
         <Footer />
 
         <Analytics />
