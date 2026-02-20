@@ -19,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_key = os.getenv("AIzaSyBjVpxRE54Qm8ueh3DOlKTz5hucTMVlwB4")  # or replace with your key string
+api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 class HitRequest(BaseModel):
