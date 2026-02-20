@@ -10,7 +10,6 @@ import { Analytics } from "@vercel/analytics/react";
 import vid2 from './assets/vid2.mov';
 import pic2 from './assets/pic2.png';
 import pic3 from './assets/pic3.png'; 
-import demoVid from './assets/Demo.mov';
 
 // Extend Three.js elements so R3F can use them as JSX tags
 extend({ CatmullRomCurve3: THREE.CatmullRomCurve3 });
