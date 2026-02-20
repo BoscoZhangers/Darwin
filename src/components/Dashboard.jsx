@@ -88,17 +88,29 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
 </head>
 <body class="mode-${mode}">
   <div id="root"></div>
+  <div id="root"></div>
   <script>
-  window.onerror = function(message, source, lineno, colno, error) { window.parent.postMessage({ type: 'ERROR', message: message + ' (' + source + ':' + lineno + ')' }, '*'); };
-  const originalError = console.error;
-  console.error = function(...args) { 
-    const msg = args.join(' ');
-    // Silently drop the Babel 500KB warning
-    if (msg.includes('[BABEL]') && msg.includes('500KB')) return;
-    window.parent.postMessage({ type: 'ERROR', message: msg }, '*'); 
-    originalError.apply(console, args); 
-  };
-</script>
+    // 1. Define the fallback globally so any error handler can use it
+    function showFallback(msg) {
+        document.body.style.zoom = '1';
+        document.body.style.MozTransform = 'none';
+        document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background-color:#0a0a0a;color:#888;font-family:-apple-system,sans-serif;text-align:center;padding:20px;box-sizing:border-box;"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;color:#444;"><path d="m19 5 3-3"/><path d="m2 22 3-3"/><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="M7.5 13.5 10 16"/><path d="M8.36 12.36 12 8.72a5.28 5.28 0 0 0-4.23-8.15l-3 3a5.27 5.27 0 0 0 8.15 4.23l-3.64 3.64"/><path d="m16 10 3.5 3.5"/><path d="m14 12 3.5 3.5"/></svg><h3 style="color:#eee;margin:0 0 8px 0;font-size:18px;">Preview Unavailable</h3><p style="margin:0;max-width:320px;font-size:14px;line-height:1.5;">' + msg + '</p></div>';
+    }
+
+    // 2. Catch global syntax and uncaught script errors
+    window.onerror = function(message, source, lineno, colno, error) { 
+        window.parent.postMessage({ type: 'ERROR', message: message + ' (' + source + ':' + lineno + ')' }, '*'); 
+        showFallback('Crash Detected: ' + message);
+    };
+
+    const originalError = console.error;
+    console.error = function(...args) { 
+        const msg = args.join(' ');
+        if (msg.includes('[BABEL]') && msg.includes('500KB')) return;
+        window.parent.postMessage({ type: 'ERROR', message: msg }, '*'); 
+        originalError.apply(console, args); 
+    };
+  </script>
   <script type="text/babel" data-presets="react,env">
     const files = ${prepareFileSystem()};
     const modules = {};
@@ -306,11 +318,26 @@ const IframeRenderer = ({ files, proposedCode, onUpdateCode, handleUpdateLayout,
       return modules[resolved];
     }
 
+    function showFallback(msg) {
+        // Reset the zoom level so the placeholder isn't tiny
+        document.body.style.zoom = '1';
+        document.body.style.MozTransform = 'none';
+        
+        // Inject the black placeholder with the disconnected cord icon
+        document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background-color:#0a0a0a;color:#888;font-family:-apple-system,sans-serif;text-align:center;padding:20px;box-sizing:border-box;"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;color:#444;"><path d="m19 5 3-3"/><path d="m2 22 3-3"/><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="M7.5 13.5 10 16"/><path d="M8.36 12.36 12 8.72a5.28 5.28 0 0 0-4.23-8.15l-3 3a5.27 5.27 0 0 0 8.15 4.23l-3.64 3.64"/><path d="m16 10 3.5 3.5"/><path d="m14 12 3.5 3.5"/></svg><h3 style="color:#eee;margin:0 0 8px 0;font-size:18px;">Preview Unavailable</h3><p style="margin:0;max-width:320px;font-size:14px;line-height:1.5;">' + msg + '</p></div>';
+    }
+
     try {
         const entry = ['src/main.jsx', 'src/index.jsx', 'src/App.jsx'].find(e => files[e]);
-        if (entry) require('root', './' + entry);
-        else document.body.innerHTML = 'No entry point found';
-    } catch (err) { console.error(err); }
+        if (entry) {
+            require('root', './' + entry);
+        } else {
+            showFallback('No compatible entry point found (missing App.jsx or main.jsx). Please ensure your repository structure is supported.');
+        }
+    } catch (err) { 
+        console.error(err); 
+        showFallback('Error compiling the preview. The repository structure might be unsupported or missing the Darwin Tracker dependencies.');
+    }
   </script>
 </body>
 </html>`;
@@ -485,21 +512,27 @@ export default function Dashboard({ user, token, repo, onBack }) {
   }, [darkMode]);
 
   useEffect(() => {
-      const handleSysLog = (e) => {
-          if (e.data.type === 'SYSTEM_LOG') {
-              setAiLog(prev => {
-                  const newLog = { role: e.data.role || 'system', text: e.data.text };
-                  if (prev.length > 0) {
-                      const lastLog = prev[prev.length - 1];
-                      if (lastLog.text === newLog.text && lastLog.role === newLog.role) return prev; 
-                  }
-                  return [...prev, newLog];
-              });
-          }
-      };
-      window.addEventListener('message', handleSysLog);
-      return () => window.removeEventListener('message', handleSysLog);
-  }, []);
+    const handleSysLog = (e) => {
+        if (e.data.type === 'SYSTEM_LOG') {
+            setAiLog(prev => {
+                const newLog = { role: e.data.role || 'system', text: e.data.text };
+                if (prev.length > 0) {
+                    const lastLog = prev[prev.length - 1];
+                    if (lastLog.text === newLog.text && lastLog.role === newLog.role) return prev; 
+                }
+                return [...prev, newLog];
+            });
+
+            if (e.data.role === 'error' && e.data.text && e.data.text.includes('Preview Error')) {
+                setTotalUsers(0);
+                setTotalDemoUsers(0);
+                setBubbles([]);
+            }
+        }
+    };
+    window.addEventListener('message', handleSysLog);
+    return () => window.removeEventListener('message', handleSysLog);
+}, []);
 
   const colorToHex = (c) => { if (!c) return '#000000'; if (typeof c !== 'string') return '#000000'; if (c.startsWith('#')) return c; const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/); if (m) return '#'+[1,2,3].map(i => parseInt(m[i]).toString(16).padStart(2,'0')).join(''); return '#000000'; };
 
