@@ -207,14 +207,7 @@ const FeaturesShowcase = () => {
           
           <div className="relative w-full max-w-5xl mx-auto aspect-video bg-black rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden">
             {/* The looping video player */}
-            <video 
-              src={demoVid} 
-              autoPlay 
-              loop 
-              muted 
-              playsInline 
-              className="w-full h-full object-cover"
-            />
+            <video src="/Demo.mp4" autoPlay loop muted playsInline />
           </div>
         </div>
 
